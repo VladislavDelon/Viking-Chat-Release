@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Frozen Chat</string>
+    <string name="title_activity_main">Frozen Chat</string>
+    <string name="package_name">com.frozenchat.app</string>
+    <string name="custom_url_scheme">com.frozenchat.app</string>
+</resources>
