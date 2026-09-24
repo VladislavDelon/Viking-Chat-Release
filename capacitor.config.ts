@@ -1,8 +1,8 @@
 import type { CapacitorConfig } from '@capacitor/cli'
 
 const config: CapacitorConfig = {
-  appId: 'com.frozenchat.app',
-  appName: 'Frozen Chat',
+  appId: 'com.vikingchat.app',
+  appName: 'Viking Chat',
   webDir: 'dist',
   android: {
     allowMixedContent: true,

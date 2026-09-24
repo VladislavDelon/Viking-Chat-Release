@@ -8,7 +8,7 @@ import type { Chat, Message, ReadMarker, User } from '../types'
  * All message payloads are ciphertext by the time they reach this layer.
  */
 
-const NS = 'frozencloud'
+const NS = 'vikingcloud'
 const key = (c: string) => `${NS}.${c}`
 
 function read<T>(c: string, fallback: T): T {

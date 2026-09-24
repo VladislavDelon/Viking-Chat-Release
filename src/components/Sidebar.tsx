@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
-  Snowflake,
+  Ship,
   Search,
   Plus,
   Sun,
@@ -107,8 +107,8 @@ export function Sidebar() {
     <aside className="sidebar">
       <div className="sidebar-head">
         <div className="brand">
-          <Snowflake size={22} className="brand-icon" />
-          <span>Frozen Chat</span>
+          <Ship size={22} className="brand-icon" />
+          <span>Viking Chat</span>
         </div>
         <div className="head-actions">
           <button className="icon-btn" title="Новый чат" onClick={() => setShowNew(true)}>

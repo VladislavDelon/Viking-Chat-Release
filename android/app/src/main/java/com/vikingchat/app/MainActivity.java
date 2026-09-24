@@ -1,4 +1,4 @@
-package com.frozenchat.app;
+package com.vikingchat.app;
 
 import com.getcapacitor.BridgeActivity;
 

@@ -26,7 +26,7 @@ export function generateAccountKey(): string {
   const raw = b64(crypto.getRandomValues(new Uint8Array(24)))
     .replace(/[+/=]/g, '')
     .toUpperCase()
-  return `FRZN-${raw.slice(0, 4)}-${raw.slice(4, 8)}-${raw.slice(8, 12)}-${raw.slice(12, 16)}-${raw.slice(16, 20)}`
+  return `VKNG-${raw.slice(0, 4)}-${raw.slice(4, 8)}-${raw.slice(8, 12)}-${raw.slice(12, 16)}-${raw.slice(16, 20)}`
 }
 
 export function normalizeAccountKey(k: string): string {

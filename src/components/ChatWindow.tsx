@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { ArrowLeft, Pin, PinOff, Search, Snowflake, Users, X, Lock } from 'lucide-react'
+import { ArrowLeft, Pin, PinOff, Search, Ship, Users, X, Lock } from 'lucide-react'
 import { useStore } from '../store/useStore'
 import { Avatar } from './Avatar'
 import { Composer } from './Composer'
 import { MessageBubble } from './MessageBubble'
 import { dayLabel } from '../lib/format'
+import { SeasonalFx } from './SeasonalFx'
 
 export function ChatWindow() {
   const {
@@ -49,14 +50,15 @@ export function ChatWindow() {
   if (!chat) {
     return (
       <main className="chat-empty">
+        <SeasonalFx count={14} />
         <motion.div
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 0.5 }}
           className="empty-hero"
         >
-          <Snowflake size={64} />
-          <h2>Frozen Chat</h2>
+          <Ship size={64} />
+          <h2>Viking Chat</h2>
           <p>Выберите чат или создайте новый</p>
           <span className="e2e-note">
             <Lock size={13} /> Сквозное шифрование · данные хранятся в облаке

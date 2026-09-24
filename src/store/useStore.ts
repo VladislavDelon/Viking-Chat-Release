@@ -22,9 +22,9 @@ import type {
   User,
 } from '../types'
 
-const LS_KEY = (login: string) => `frozen.key.${login.toLowerCase()}`
-const LS_SESSION = 'frozen.session'
-const LS_THEME = 'frozen.theme'
+const LS_KEY = (login: string) => `viking.key.${login.toLowerCase()}`
+const LS_SESSION = 'viking.session'
+const LS_THEME = 'viking.theme'
 
 interface State {
   ready: boolean
@@ -102,7 +102,7 @@ export const useStore = create<State>((set, get) => {
     get().toast(title, body)
     if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
       try {
-        new Notification(title, { body, icon: '/snowflake.svg' })
+        new Notification(title, { body, icon: '/viking.svg' })
       } catch {
         /* unsupported */
       }
@@ -244,7 +244,8 @@ export const useStore = create<State>((set, get) => {
       const { needKeyFor } = get()
       if (!needKeyFor) return false
       const normalized = normalizeAccountKey(key)
-      if (!/^FRZN(-[A-Z0-9]{4,6})+$/.test(normalized) && normalized.length < 10) return false
+      if (!/^(VKNG|FRZN)(-[A-Z0-9]{4,6})+$/.test(normalized) && normalized.length < 10)
+        return false
       const u = await cloud.userByLogin(needKeyFor)
       if (!u) return false
       const vault = await Vault.fromAccountKey(normalized)

@@ -1,10 +1,11 @@
 Add-Type -AssemblyName System.Drawing
 
-function New-Icon([int]$size, [string]$path, [double]$flakeScale = 0.30) {
+function New-Icon([int]$size, [string]$path, [double]$shieldScale = 0.62) {
   $bmp = New-Object System.Drawing.Bitmap($size, $size)
   $g = [System.Drawing.Graphics]::FromImage($bmp)
   $g.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
 
+  # gradient background
   $rect = New-Object System.Drawing.Rectangle(0, 0, $size, $size)
   $brush = New-Object System.Drawing.Drawing2D.LinearGradientBrush(
     $rect,
@@ -14,39 +15,41 @@ function New-Icon([int]$size, [string]$path, [double]$flakeScale = 0.30) {
   )
   $g.FillRectangle($brush, $rect)
 
-  $penWidth = [single]($size * 0.045)
-  $pen = New-Object System.Drawing.Pen([System.Drawing.Color]::White, $penWidth)
-  $pen.StartCap = [System.Drawing.Drawing2D.LineCap]::Round
-  $pen.EndCap = [System.Drawing.Drawing2D.LineCap]::Round
-
+  # viking round shield
+  $d = $size * $shieldScale
+  $x = ($size - $d) / 2
+  $y = ($size - $d) / 2
   $cx = $size / 2.0
   $cy = $size / 2.0
-  $r = $size * $flakeScale
-  for ($i = 0; $i -lt 6; $i++) {
-    $a = [math]::PI / 3 * $i - [math]::PI / 2
-    $x2 = $cx + $r * [math]::Cos($a)
-    $y2 = $cy + $r * [math]::Sin($a)
-    $g.DrawLine($pen, [single]$cx, [single]$cy, [single]$x2, [single]$y2)
 
-    foreach ($t in @(0.55, 0.8)) {
-      $bx = $cx + $r * $t * [math]::Cos($a)
-      $by = $cy + $r * $t * [math]::Sin($a)
-      $bl = $r * 0.22
-      foreach ($da in @(0.55, -0.55)) {
-        $g.DrawLine(
-          $pen,
-          [single]$bx, [single]$by,
-          [single]($bx + $bl * [math]::Cos($a + $da)),
-          [single]($by + $bl * [math]::Sin($a + $da))
-        )
-      }
-    }
+  # outer ring
+  $ringPen = New-Object System.Drawing.Pen([System.Drawing.Color]::White, [single]($size * 0.055))
+  $g.DrawEllipse($ringPen, [single]$x, [single]$y, [single]$d, [single]$d)
+
+  # rim inner ring (subtle)
+  $inner = $d * 0.86
+  $thinPen = New-Object System.Drawing.Pen([System.Drawing.Color]::FromArgb(140, 255, 255, 255), [single]($size * 0.02))
+  $g.DrawEllipse($thinPen, [single](($size - $inner) / 2), [single](($size - $inner) / 2), [single]$inner, [single]$inner)
+
+  # spokes
+  $spokePen = New-Object System.Drawing.Pen([System.Drawing.Color]::White, [single]($size * 0.03))
+  $spokePen.StartCap = [System.Drawing.Drawing2D.LineCap]::Round
+  $spokePen.EndCap = [System.Drawing.Drawing2D.LineCap]::Round
+  $r1 = $d * 0.14   # from boss edge
+  $r2 = $d * 0.40   # to inner ring
+  foreach ($ang in @(0, 90, 180, 270)) {
+    $a = $ang * [math]::PI / 180 - [math]::PI / 2
+    $g.DrawLine(
+      $spokePen,
+      [single]($cx + $r1 * [math]::Cos($a)), [single]($cy + $r1 * [math]::Sin($a)),
+      [single]($cx + $r2 * [math]::Cos($a)), [single]($cy + $r2 * [math]::Sin($a))
+    )
   }
-  $g.FillEllipse(
-    (New-Object System.Drawing.SolidBrush([System.Drawing.Color]::White)),
-    [single]($cx - $size * 0.035), [single]($cy - $size * 0.035),
-    [single]($size * 0.07), [single]($size * 0.07)
-  )
+
+  # boss (center dome)
+  $boss = $d * 0.2
+  $bossBrush = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::White)
+  $g.FillEllipse($bossBrush, [single]($cx - $boss / 2), [single]($cy - $boss / 2), [single]$boss, [single]$boss)
 
   $bmp.Save($path, [System.Drawing.Imaging.ImageFormat]::Png)
   $g.Dispose(); $bmp.Dispose()
@@ -56,5 +59,5 @@ function New-Icon([int]$size, [string]$path, [double]$flakeScale = 0.30) {
 New-Item -ItemType Directory -Force -Path "public\icons" | Out-Null
 New-Icon 192 "public\icons\icon-192.png"
 New-Icon 512 "public\icons\icon-512.png"
-New-Icon 512 "public\icons\icon-maskable-512.png" 0.24
+New-Icon 512 "public\icons\icon-maskable-512.png" 0.52
 New-Icon 180 "public\icons\apple-touch-icon.png"

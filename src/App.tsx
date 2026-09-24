@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { useStore } from './store/useStore'
+import { getSeason, SEASON_META } from './lib/season'
 import { AuthScreen } from './components/AuthScreen'
 import { Sidebar } from './components/Sidebar'
 import { ChatWindow } from './components/ChatWindow'
@@ -14,6 +15,7 @@ export default function App() {
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme
+    document.documentElement.dataset.season = getSeason()
   }, [theme])
 
   useEffect(() => {
@@ -24,13 +26,13 @@ export default function App() {
       const at = marker?.lastReadAt ?? 0
       return acc + (messages[c.id] ?? []).filter(m => m.createdAt > at && m.senderId !== me).length
     }, 0)
-    document.title = unread > 0 ? `(${unread}) Frozen Chat` : 'Frozen Chat'
+    document.title = unread > 0 ? `(${unread}) Viking Chat` : 'Viking Chat'
   }, [chats, messages, user?.id])
 
   if (!ready)
     return (
       <div className="boot">
-        <span className="boot-flake">❄</span>
+        <span className="boot-flake">{SEASON_META[getSeason()].big}</span>
       </div>
     )
   if (!user) return <AuthScreen />

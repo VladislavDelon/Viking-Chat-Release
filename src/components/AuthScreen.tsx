@@ -1,7 +1,9 @@
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Snowflake, Copy, Check, KeyRound, LogIn, UserPlus, ShieldCheck } from 'lucide-react'
+import { Ship, Copy, Check, KeyRound, LogIn, UserPlus, ShieldCheck } from 'lucide-react'
 import { useStore } from '../store/useStore'
+import { SeasonalFx } from './SeasonalFx'
+import { getSeason, SEASON_META } from '../lib/season'
 
 type Mode = 'login' | 'register'
 
@@ -16,19 +18,7 @@ export function AuthScreen() {
   const [busy, setBusy] = useState(false)
   const [newKey, setNewKey] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
-
-  const flakes = useMemo(
-    () =>
-      Array.from({ length: 26 }, (_, i) => ({
-        id: i,
-        left: Math.random() * 100,
-        delay: Math.random() * 12,
-        dur: 9 + Math.random() * 10,
-        size: 8 + Math.random() * 16,
-        opacity: 0.25 + Math.random() * 0.5,
-      })),
-    [],
-  )
+  const season = getSeason()
 
   async function doLogin() {
     setBusy(true)
@@ -64,21 +54,7 @@ export function AuthScreen() {
 
   return (
     <div className="auth-bg">
-      {flakes.map(f => (
-        <span
-          key={f.id}
-          className="snow"
-          style={{
-            left: `${f.left}%`,
-            animationDelay: `${f.delay}s`,
-            animationDuration: `${f.dur}s`,
-            fontSize: f.size,
-            opacity: f.opacity,
-          }}
-        >
-          ❄
-        </span>
-      ))}
+      <SeasonalFx />
 
       <motion.div
         className="auth-card"
@@ -87,10 +63,13 @@ export function AuthScreen() {
         transition={{ duration: 0.45, ease: 'easeOut' }}
       >
         <div className="auth-logo">
-          <Snowflake size={34} />
+          <Ship size={34} />
         </div>
-        <h1>Frozen Chat</h1>
+        <h1>Viking Chat</h1>
         <p className="auth-sub">Защищённый облачный мессенджер</p>
+        <div className="season-chip">
+          {SEASON_META[season].big} {SEASON_META[season].label}
+        </div>
 
         <AnimatePresence mode="wait">
           {needKeyFor ? (
@@ -107,7 +86,7 @@ export function AuthScreen() {
               </div>
               <input
                 className="input mono"
-                placeholder="FRZN-XXXX-XXXX-XXXX-XXXX-XXXX"
+                placeholder="VKNG-XXXX-XXXX-XXXX-XXXX-XXXX"
                 value={keyInput}
                 onChange={e => setKeyInput(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && doKey()}

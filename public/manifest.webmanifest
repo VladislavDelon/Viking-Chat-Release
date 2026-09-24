@@ -1,6 +1,6 @@
 {
-  "name": "Frozen Chat",
-  "short_name": "Frozen",
+  "name": "Viking Chat",
+  "short_name": "Viking",
   "description": "Защищённый облачный мессенджер",
   "start_url": "/",
   "scope": "/",

@@ -3,15 +3,15 @@ import { colorFor, uid, Vault } from './crypto'
 import type { Chat, User } from '../types'
 
 export const BOT_REPLIES = [
-  'Принято ❄️',
+  'Принято, воин ⚔️',
+  'Сколь! 🍺',
   'Интересно! Расскажи подробнее.',
-  'Согласен, отличная идея 🧊',
+  'Согласен, отличная идея 🛡',
   'Ха, классно 😄',
-  'Я как раз об этом думал.',
-  'Давай обсудим это в группе?',
-  'Ок, записал себе.',
+  'За Одина и Вальгаллу!',
+  'Давай обсудим это у костра?',
+  'Ок, записал на рунном камне.',
   'Круто! А что дальше?',
-  'Морозно сегодня, правда? 🥶',
   '👍',
 ]
 
@@ -22,9 +22,9 @@ interface BotDef {
 }
 
 const BOTS: BotDef[] = [
-  { login: 'snowflake', name: 'Снежинка', greet: 'Привет! Я Снежинка ❄️ Рада видеть тебя в Frozen Chat!' },
-  { login: 'iceberg', name: 'Айсберг', greet: 'Йо! Добро пожаловать. Тут всё хранится в облаке и под шифром 🧊' },
-  { login: 'fox', name: 'Полярный Лис', greet: 'Привет-привет! Пиши, если что-то понадобится 🦊' },
+  { login: 'lagertha', name: 'Лагерта', greet: 'Привет, воин! Я Лагерта ⚔️ Добро пожаловать в Viking Chat!' },
+  { login: 'ragnar', name: 'Рагнар', greet: 'Сколь! Здесь вся переписка под шифром и хранится в облаке 🛡' },
+  { login: 'floki', name: 'Флоки', greet: 'Хей! Я построил этот чат из драккаров и шифров 😄 Пиши, если что-то нужно!' },
 ]
 
 /** Creates demo contacts, a group and a channel for a freshly registered account. */
@@ -82,7 +82,7 @@ export async function seedFor(user: User, vault: Vault): Promise<Chat[]> {
   const group: Chat = {
     id: uid(),
     kind: 'group',
-    title: 'Команда Frozen',
+    title: 'Команда Viking',
     memberIds: [user.id],
     ownerId: user.id,
     color: '#7c5bff',
@@ -92,11 +92,11 @@ export async function seedFor(user: User, vault: Vault): Promise<Chat[]> {
   const channel: Chat = {
     id: uid(),
     kind: 'channel',
-    title: 'Frozen News',
+    title: 'Viking News',
     memberIds: [user.id],
     ownerId: user.id,
     color: '#3fb6b2',
-    description: 'Новости и обновления Frozen Chat',
+    description: 'Новости и обновления Viking Chat',
     createdAt: now,
   }
   await cloud.saveChat(group)
@@ -113,7 +113,7 @@ export async function seedFor(user: User, vault: Vault): Promise<Chat[]> {
     payload: gPayload,
   })
   const cPayload = {
-    t: 'Frozen Chat запущен! 🚀 Сквозное шифрование, облачная синхронизация и морозный дизайн — уже здесь.',
+    t: 'Viking Chat запущен! ⚔️ Сквозное шифрование, облачная синхронизация и северный дизайн — уже здесь.',
   }
   await cloud.appendMessage({
     id: uid(),

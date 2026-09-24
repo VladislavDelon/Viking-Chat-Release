@@ -64,20 +64,59 @@ input, textarea { font: inherit; color: inherit; }
     radial-gradient(ellipse at 85% 90%, rgba(124, 107, 255, 0.2), transparent 50%),
     linear-gradient(160deg, #0a1120, #0e1a30 55%, #101f3a);
 }
-.snow {
-  position: absolute; top: -30px; color: #bfe4ff; user-select: none; pointer-events: none;
+.snow, .flake {
+  position: absolute; top: -40px; color: #bfe4ff; user-select: none; pointer-events: none;
   animation: fall linear infinite;
+  z-index: 1;
 }
 @keyframes fall {
-  0% { transform: translateY(-30px) translateX(0) rotate(0); }
-  100% { transform: translateY(105vh) translateX(30px) rotate(340deg); }
+  0% { transform: translateY(-40px) translateX(0) rotate(0deg); }
+  25% { transform: translateY(26vh) translateX(26px) rotate(95deg); }
+  50% { transform: translateY(52vh) translateX(-16px) rotate(190deg); }
+  75% { transform: translateY(78vh) translateX(22px) rotate(280deg); }
+  100% { transform: translateY(106vh) translateX(-8px) rotate(375deg); }
+}
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-5px); }
+}
+
+/* seasonal auth backgrounds */
+html[data-season='winter'] .auth-bg {
+  background:
+    radial-gradient(ellipse at 15% 10%, rgba(88, 182, 255, 0.22), transparent 50%),
+    radial-gradient(ellipse at 85% 90%, rgba(124, 107, 255, 0.2), transparent 50%),
+    linear-gradient(160deg, #0a1120, #0e1a30 55%, #101f3a);
+}
+html[data-season='spring'] .auth-bg {
+  background:
+    radial-gradient(ellipse at 15% 10%, rgba(255, 150, 200, 0.18), transparent 50%),
+    radial-gradient(ellipse at 85% 90%, rgba(110, 220, 150, 0.16), transparent 50%),
+    linear-gradient(160deg, #0b1410, #12221a 55%, #14281f);
+}
+html[data-season='summer'] .auth-bg {
+  background:
+    radial-gradient(ellipse at 15% 10%, rgba(255, 200, 80, 0.18), transparent 50%),
+    radial-gradient(ellipse at 85% 90%, rgba(60, 190, 220, 0.2), transparent 50%),
+    linear-gradient(160deg, #0a1418, #10242a 55%, #132b30);
+}
+html[data-season='autumn'] .auth-bg {
+  background:
+    radial-gradient(ellipse at 15% 10%, rgba(255, 150, 60, 0.2), transparent 50%),
+    radial-gradient(ellipse at 85% 90%, rgba(190, 90, 40, 0.18), transparent 50%),
+    linear-gradient(160deg, #150f0a, #251812 55%, #2b1e14);
+}
+.season-chip {
+  display: inline-flex; align-items: center; gap: 6px; margin-bottom: 18px;
+  padding: 5px 13px; border-radius: 999px; font-size: 12px; font-weight: 600;
+  color: var(--text2); background: var(--input); border: 1px solid var(--border);
 }
 .auth-card {
   width: min(400px, calc(100vw - 32px)); padding: 34px 30px; border-radius: 22px;
   background: var(--panel); backdrop-filter: blur(18px); border: 1px solid var(--border);
   box-shadow: var(--shadow); text-align: center; z-index: 2;
 }
-.auth-logo { color: var(--accent); margin-bottom: 8px; animation: spin 8s linear infinite; display: inline-block; }
+.auth-logo { color: var(--accent); margin-bottom: 8px; animation: float 3.5s ease-in-out infinite; display: inline-block; filter: drop-shadow(0 4px 12px rgba(88, 182, 255, 0.4)); }
 .auth-card h1 { font-size: 26px; letter-spacing: 0.5px; }
 .auth-sub { color: var(--text2); font-size: 13px; margin: 4px 0 22px; }
 .auth-tabs {
@@ -130,7 +169,7 @@ input, textarea { font: inherit; color: inherit; }
   padding: 14px 16px 10px;
 }
 .brand { display: flex; align-items: center; gap: 9px; font-weight: 800; font-size: 17px; letter-spacing: 0.3px; }
-.brand-icon { color: var(--accent); animation: spin 9s linear infinite; }
+.brand-icon { color: var(--accent); animation: float 4s ease-in-out infinite; }
 .head-actions { display: flex; gap: 2px; }
 .icon-btn {
   display: grid; place-items: center; width: 34px; height: 34px; border-radius: 10px;
@@ -186,9 +225,10 @@ input, textarea { font: inherit; color: inherit; }
 /* ---------- chat ---------- */
 .chat-empty {
   flex: 1; display: grid; place-items: center; background: var(--msg-bg);
+  position: relative; overflow: hidden;
 }
-.empty-hero { text-align: center; color: var(--text2); }
-.empty-hero svg { color: var(--accent); opacity: 0.8; margin-bottom: 12px; animation: spin 14s linear infinite; }
+.empty-hero { text-align: center; color: var(--text2); position: relative; z-index: 2; }
+.empty-hero svg { color: var(--accent); opacity: 0.85; margin-bottom: 12px; animation: float 4s ease-in-out infinite; filter: drop-shadow(0 6px 16px rgba(88, 182, 255, 0.35)); }
 .empty-hero h2 { color: var(--text); font-size: 24px; margin-bottom: 6px; }
 .e2e-note { display: inline-flex; gap: 6px; align-items: center; margin-top: 18px; font-size: 12px; padding: 8px 14px; border: 1px solid var(--border); border-radius: 999px; background: var(--panel); }
 

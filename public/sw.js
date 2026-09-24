@@ -1,4 +1,4 @@
-const CACHE = 'frozen-v1'
+const CACHE = 'viking-v1'
 
 self.addEventListener('install', e => {
   self.skipWaiting()
