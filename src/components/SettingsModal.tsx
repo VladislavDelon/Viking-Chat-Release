@@ -14,14 +14,26 @@ import {
   User as UserIcon,
   ShieldCheck,
   Palette,
+  Cloud,
 } from 'lucide-react'
 import { accountKeyFor, useStore } from '../store/useStore'
+import { loadSyncConfig } from '../lib/github'
 import { Avatar } from './Avatar'
 import { fileToAvatar } from '../lib/image'
 
 export function SettingsModal({ onClose }: { onClose: () => void }) {
-  const { user, theme, setTheme, updateProfile, changeLogin, changePassword, logout, toast } =
-    useStore()
+  const {
+    user,
+    theme,
+    setTheme,
+    updateProfile,
+    changeLogin,
+    changePassword,
+    logout,
+    toast,
+    connectSync,
+  } = useStore()
+  const syncCfg = loadSyncConfig()
   const [name, setName] = useState(user?.name ?? '')
   const [bio, setBio] = useState(user?.bio ?? '')
   const [login, setLogin] = useState(user?.login ?? '')
@@ -32,6 +44,10 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
   const [showKey, setShowKey] = useState(false)
   const [copied, setCopied] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [syncRepo, setSyncRepo] = useState(syncCfg?.repo ?? 'VladislavDelon/Viking-Chat-Closed')
+  const [syncToken, setSyncToken] = useState(syncCfg?.token ?? '')
+  const [syncErr, setSyncErr] = useState<string | null>(null)
+  const [synced, setSynced] = useState(!!syncCfg)
   const fileRef = useRef<HTMLInputElement>(null)
 
   if (!user) return null
@@ -81,6 +97,25 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
     void navigator.clipboard?.writeText(accountKey)
     setCopied(true)
     setTimeout(() => setCopied(false), 1600)
+  }
+
+  async function saveSync() {
+    setBusy(true)
+    setSyncErr(null)
+    const err = await connectSync(
+      syncToken.trim() && syncRepo.trim()
+        ? { token: syncToken.trim(), repo: syncRepo.trim() }
+        : null,
+    )
+    setBusy(false)
+    if (err) setSyncErr(err)
+    else {
+      setSynced(!!syncToken.trim())
+      toast(
+        syncToken.trim() ? 'Облако подключено' : 'Синхронизация отключена',
+        syncToken.trim() ? syncRepo.trim() : 'Данные хранятся локально',
+      )
+    }
   }
 
   return (
@@ -189,6 +224,34 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
           </div>
           <p className="modal-hint">
             Ключ аккаунта нужен для входа на новом устройстве — он расшифровывает облачные данные.
+          </p>
+        </div>
+
+        <div className="set-section">
+          <div className="set-title">
+            <Cloud size={15} /> Облачная синхронизация
+            <span className={`sync-dot ${synced ? 'on' : ''}`} />
+          </div>
+          <input
+            className="input mono"
+            placeholder="owner/repo"
+            value={syncRepo}
+            onChange={e => setSyncRepo(e.target.value)}
+          />
+          <input
+            className="input mono"
+            type="password"
+            placeholder="GitHub token (repo)"
+            value={syncToken}
+            onChange={e => setSyncToken(e.target.value)}
+          />
+          {syncErr && <div className="auth-error">{syncErr}</div>}
+          <button className="btn primary" disabled={busy} onClick={saveSync}>
+            {synced ? 'Обновить подключение' : 'Подключить облако'}
+          </button>
+          <p className="modal-hint">
+            Переписка хранится в приватном репозитории в зашифрованном виде и синхронизируется между
+            устройствами каждые ~15 сек.
           </p>
         </div>
 

@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { cloud } from '../lib/cloud'
+import { loadSyncConfig, saveSyncConfig, type SyncConfig } from '../lib/github'
 import {
   Vault,
   generateAccountKey,
@@ -55,6 +56,7 @@ interface State {
   updateProfile: (patch: { name?: string; bio?: string; avatar?: string }) => Promise<void>
   changeLogin: (newLogin: string) => Promise<string | null>
   changePassword: (current: string, next: string) => Promise<string | null>
+  connectSync: (cfg: SyncConfig | null) => Promise<string | null>
   setTheme: (t: Theme) => void
   toast: (title: string, body: string) => void
   dismissToast: (id: string) => void
@@ -180,10 +182,12 @@ export const useStore = create<State>((set, get) => {
     authError: null,
 
     async init() {
+      cloud.configure(loadSyncConfig(), null)
       cloud.onExternalChange(scheduleRefresh)
       const login = localStorage.getItem(LS_SESSION)
       const accountKey = login ? localStorage.getItem(LS_KEY(login)) : null
       if (login && accountKey) {
+        cloud.configure(loadSyncConfig(), login)
         const u = await cloud.userByLogin(login)
         if (u) {
           const vault = await Vault.fromAccountKey(accountKey)
@@ -214,6 +218,7 @@ export const useStore = create<State>((set, get) => {
         salt,
         createdAt: Date.now(),
       }
+      cloud.configure(loadSyncConfig(), login)
       await cloud.saveUser(user)
       localStorage.setItem(LS_KEY(login), accountKey)
       const vault = await Vault.fromAccountKey(accountKey)
@@ -229,7 +234,11 @@ export const useStore = create<State>((set, get) => {
 
     async login(login, password) {
       const u = await cloud.userByLogin(login.trim())
-      if (!u) return 'Пользователь не найден'
+      if (!u) {
+        cloud.configure(loadSyncConfig(), null)
+        return 'Пользователь не найден'
+      }
+      cloud.configure(loadSyncConfig(), u.login)
       if ((await hashPassword(password, u.salt)) !== u.passwordHash) return 'Неверный пароль'
       const accountKey = localStorage.getItem(LS_KEY(u.login))
       if (!accountKey) {
@@ -251,6 +260,7 @@ export const useStore = create<State>((set, get) => {
         return false
       const u = await cloud.userByLogin(needKeyFor)
       if (!u) return false
+      cloud.configure(loadSyncConfig(), u.login)
       const vault = await Vault.fromAccountKey(normalized)
       localStorage.setItem(LS_KEY(u.login), normalized)
       set({ user: u, vault, needKeyFor: null, authError: null })
@@ -261,7 +271,27 @@ export const useStore = create<State>((set, get) => {
 
     logout() {
       localStorage.removeItem(LS_SESSION)
+      cloud.configure(loadSyncConfig(), null)
       set({ user: null, vault: null, activeChatId: null, chats: [], messages: {}, reads: [] })
+    },
+
+    async connectSync(cfg) {
+      saveSyncConfig(cfg)
+      const { user } = get()
+      cloud.configure(cfg, user?.login ?? null)
+      if (cfg && user) {
+        try {
+          await cloud.uploadAll(user)
+          await loadAll()
+          return null
+        } catch (e) {
+          saveSyncConfig(null)
+          cloud.configure(null, user.login)
+          return `Не удалось подключиться: ${String(e)}`
+        }
+      }
+      if (user) await loadAll()
+      return null
     },
 
     openChat(chatId) {

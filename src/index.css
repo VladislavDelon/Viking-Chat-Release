@@ -417,6 +417,8 @@ html[data-season='autumn'] .auth-bg {
   background: rgba(255, 90, 110, 0.12); color: #ff7b8a; border: 1px solid rgba(255, 90, 110, 0.3);
 }
 .btn.danger:hover { background: rgba(255, 90, 110, 0.2); }
+.sync-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--text2); margin-left: auto; }
+.sync-dot.on { background: #4ade80; box-shadow: 0 0 8px #4ade80; }
 
 /* ---------- toasts ---------- */
 .toasts { position: fixed; right: 18px; bottom: 18px; z-index: 60; display: flex; flex-direction: column; gap: 10px; }
