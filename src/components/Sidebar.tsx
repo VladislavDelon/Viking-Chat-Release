@@ -6,7 +6,7 @@ import {
   Plus,
   Sun,
   Moon,
-  LogOut,
+  Settings,
   Pin,
   Users,
   Megaphone,
@@ -14,9 +14,10 @@ import {
 } from 'lucide-react'
 import { useStore, useUnread } from '../store/useStore'
 import { Avatar } from './Avatar'
-import { listTime } from '../lib/format'
+import { chatDisplay, listTime } from '../lib/format'
 import type { Chat, ChatKind } from '../types'
 import { NewChatModal } from './NewChatModal'
+import { SettingsModal } from './SettingsModal'
 
 const FILTERS: { id: ChatKind | 'all'; label: string }[] = [
   { id: 'all', label: 'Все' },
@@ -32,11 +33,11 @@ function chatIcon(kind: ChatKind) {
 }
 
 function ChatItem({ chat, active }: { chat: Chat; active: boolean }) {
-  const { openChat, messages, user } = useStore()
+  const { openChat, messages, users, user } = useStore()
   const unread = useUnread(chat.id)
   const list = messages[chat.id] ?? []
   const last = list[list.length - 1]
-  const isSaved = chat.kind === 'direct' && chat.memberIds.length === 1
+  const disp = chatDisplay(chat, users, user?.id)
   const preview = last?.payload?.a?.length
     ? `📎 ${last.payload.a[0].kind === 'image' ? 'Фото' : last.payload.a[0].kind === 'video' ? 'Видео' : 'Файл'}`
     : (last?.payload?.t ?? '')
@@ -50,11 +51,11 @@ function ChatItem({ chat, active }: { chat: Chat; active: boolean }) {
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
     >
-      <Avatar name={chat.title} color={chat.color} saved={isSaved} />
+      <Avatar name={disp.title} color={disp.color} saved={disp.saved} src={disp.avatar} />
       <div className="chat-item-main">
         <div className="chat-item-top">
           <span className="chat-title">
-            {chatIcon(chat.kind)} {chat.title}
+            {chatIcon(chat.kind)} {disp.title}
           </span>
           {last && <span className="chat-time">{listTime(last.createdAt)}</span>}
         </div>
@@ -72,10 +73,11 @@ function ChatItem({ chat, active }: { chat: Chat; active: boolean }) {
 }
 
 export function Sidebar() {
-  const { user, chats, messages, activeChatId, theme, setTheme, logout, openChat } = useStore()
+  const { user, users, chats, messages, activeChatId, theme, setTheme, openChat } = useStore()
   const [query, setQuery] = useState('')
   const [filter, setFilter] = useState<ChatKind | 'all'>('all')
   const [showNew, setShowNew] = useState(false)
+  const [showSettings, setShowSettings] = useState(false)
 
   const sorted = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -121,8 +123,8 @@ export function Sidebar() {
           >
             {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
           </button>
-          <button className="icon-btn" title={`Выйти (@${user?.login})`} onClick={logout}>
-            <LogOut size={18} />
+          <button className="icon-btn" title="Настройки" onClick={() => setShowSettings(true)}>
+            <Settings size={18} />
           </button>
         </div>
       </div>
@@ -167,7 +169,9 @@ export function Sidebar() {
           <div className="msg-results-title">Сообщения ({msgResults.length})</div>
           {msgResults.map((r, i) => (
             <button key={i} className="msg-result" onClick={() => openChat(r.chat.id)}>
-              <span className="msg-result-chat">{r.chat.title}</span>
+              <span className="msg-result-chat">
+                {chatDisplay(r.chat, users, user?.id).title}
+              </span>
               <span className="msg-result-text">
                 {r.text.length > 90 ? r.text.slice(0, 90) + '…' : r.text}
               </span>
@@ -177,6 +181,9 @@ export function Sidebar() {
       )}
 
       <AnimatePresence>{showNew && <NewChatModal onClose={() => setShowNew(false)} />}</AnimatePresence>
+      <AnimatePresence>
+        {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
+      </AnimatePresence>
     </aside>
   )
 }

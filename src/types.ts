@@ -8,6 +8,8 @@ export interface User {
   color: string
   passwordHash: string
   salt: string
+  avatar?: string
+  bio?: string
   bot?: boolean
   createdAt: number
 }

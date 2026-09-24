@@ -36,3 +36,19 @@ export function initials(name: string): string {
     .map(w => w[0]?.toUpperCase() ?? '')
     .join('')
 }
+
+import type { Chat, User } from '../types'
+
+/** Resolves how a chat looks in lists/headers — direct chats mirror the other member's profile. */
+export function chatDisplay(
+  chat: Chat,
+  users: User[],
+  myId: string | undefined,
+): { title: string; color: string; avatar?: string; saved: boolean } {
+  const saved = chat.kind === 'direct' && chat.memberIds.length === 1
+  if (chat.kind === 'direct' && !saved) {
+    const other = users.find(u => u.id === chat.memberIds.find(id => id !== myId))
+    if (other) return { title: other.name, color: other.color, avatar: other.avatar, saved }
+  }
+  return { title: chat.title, color: chat.color, saved }
+}

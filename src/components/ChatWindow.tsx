@@ -5,7 +5,7 @@ import { useStore } from '../store/useStore'
 import { Avatar } from './Avatar'
 import { Composer } from './Composer'
 import { MessageBubble } from './MessageBubble'
-import { dayLabel } from '../lib/format'
+import { chatDisplay, dayLabel } from '../lib/format'
 import { SeasonalFx } from './SeasonalFx'
 
 export function ChatWindow() {
@@ -68,7 +68,8 @@ export function ChatWindow() {
     )
   }
 
-  const isSaved = chat.kind === 'direct' && chat.memberIds.length === 1
+  const disp = chatDisplay(chat, users, user?.id)
+  const isSaved = disp.saved
   const subtitle =
     chat.id in typing
       ? `${typing[chat.id]} печатает…`
@@ -92,9 +93,9 @@ export function ChatWindow() {
         <button className="icon-btn back-btn" onClick={() => openChat(null)}>
           <ArrowLeft size={20} />
         </button>
-        <Avatar name={chat.title} color={chat.color} size={40} saved={isSaved} />
+        <Avatar name={disp.title} color={disp.color} size={40} saved={isSaved} src={disp.avatar} />
         <div className="chat-head-info">
-          <div className="chat-head-title">{chat.title}</div>
+          <div className="chat-head-title">{disp.title}</div>
           <div className={`chat-head-sub ${chat.id in typing ? 'typing' : ''}`}>{subtitle}</div>
         </div>
         <div className="chat-head-actions">

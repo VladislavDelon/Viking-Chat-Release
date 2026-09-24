@@ -52,6 +52,9 @@ interface State {
   removeMessage: (id: string) => Promise<void>
   createChat: (kind: ChatKind, title: string, memberIds: string[]) => Promise<Chat>
   togglePin: (chatId: string) => Promise<void>
+  updateProfile: (patch: { name?: string; bio?: string; avatar?: string }) => Promise<void>
+  changeLogin: (newLogin: string) => Promise<string | null>
+  changePassword: (current: string, next: string) => Promise<string | null>
   setTheme: (t: Theme) => void
   toast: (title: string, body: string) => void
   dismissToast: (id: string) => void
@@ -324,6 +327,53 @@ export const useStore = create<State>((set, get) => {
       }))
     },
 
+    async updateProfile(patch) {
+      const { user } = get()
+      if (!user) return
+      if (patch.name !== undefined) user.name = patch.name.trim() || user.name
+      if (patch.bio !== undefined) user.bio = patch.bio.trim()
+      if (patch.avatar !== undefined) user.avatar = patch.avatar
+      await cloud.saveUser(user)
+      set(s => ({
+        user: { ...user },
+        users: s.users.map(u => (u.id === user.id ? { ...user } : u)),
+      }))
+    },
+
+    async changeLogin(newLogin) {
+      const { user } = get()
+      if (!user) return 'Нет сессии'
+      const login = newLogin.trim()
+      if (!/^[a-zA-Z0-9_.-]{3,24}$/.test(login))
+        return 'Логин: 3–24 символа, латиница, цифры, _ . -'
+      if (login.toLowerCase() === user.login.toLowerCase()) return null
+      if (await cloud.userByLogin(login)) return 'Такой логин уже занят'
+      const oldLogin = user.login
+      const accountKey = localStorage.getItem(LS_KEY(oldLogin))
+      user.login = login
+      await cloud.saveUser(user)
+      if (accountKey) {
+        localStorage.setItem(LS_KEY(login), accountKey)
+        localStorage.removeItem(LS_KEY(oldLogin))
+      }
+      localStorage.setItem(LS_SESSION, login)
+      set({ user: { ...user } })
+      return null
+    },
+
+    async changePassword(current, next) {
+      const { user } = get()
+      if (!user) return 'Нет сессии'
+      if ((await hashPassword(current, user.salt)) !== user.passwordHash)
+        return 'Неверный текущий пароль'
+      if (next.length < 4) return 'Новый пароль: минимум 4 символа'
+      user.salt = randomSalt()
+      user.passwordHash = await hashPassword(next, user.salt)
+      await cloud.saveUser(user)
+      set({ user: { ...user } })
+      return null
+    },
+
     setTheme(t) {
       localStorage.setItem(LS_THEME, t)
       set({ theme: t })
@@ -344,6 +394,10 @@ export const useStore = create<State>((set, get) => {
     },
   }
 })
+
+export function accountKeyFor(login: string): string | null {
+  return localStorage.getItem(LS_KEY(login))
+}
 
 export function useUnread(chatId: string): number {
   return useStore(s => {
