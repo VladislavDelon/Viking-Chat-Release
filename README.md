@@ -2,13 +2,35 @@
 
 Современный защищённый мессенджер — прототип в духе Telegram/WhatsApp.
 
-## Запуск
+## Запуск (веб)
 
 ```bash
 npm install
-npm run dev      # http://localhost:5173
-npm run build    # production build в dist/
+npm run dev                  # dev: http://localhost:5173
+npm run build                # production build в dist/
+npx vite preview --host      # раздать build по локальной сети
 ```
+
+Приложение — PWA: на Android откройте сайт в Chrome → «Установить приложение».
+
+## Android
+
+Готовый debug-APK: `FrozenChat-debug.apk` в корне проекта.
+Сборка из исходников:
+
+```bash
+npm run build                # обновить dist/
+npx cap sync android         # скопировать в android-проект
+cd android && gradlew.bat assembleDebug
+# APK: android/app/build/outputs/apk/debug/app-debug.apk
+```
+
+Требуется JDK 17+ и Android SDK (`android/local.properties` → `sdk.dir=...`).
+
+## Деплой
+
+`.github/workflows/deploy.yml` — автодеплой веб-версии на GitHub Pages при пуше в `main`
+(включить Pages: Settings → Pages → Source: GitHub Actions).
 
 ## Возможности
 
