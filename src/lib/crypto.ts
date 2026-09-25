@@ -59,6 +59,16 @@ export class Vault {
     return new Vault(key)
   }
 
+  /** Per-chat shared key — every member can read messages of a chat they belong to. */
+  static async forChat(chatId: string): Promise<Vault> {
+    const digest = await crypto.subtle.digest('SHA-256', te.encode(`viking.chatkey.${chatId}`))
+    const key = await crypto.subtle.importKey('raw', digest, { name: 'AES-GCM' }, false, [
+      'encrypt',
+      'decrypt',
+    ])
+    return new Vault(key)
+  }
+
   async encryptJson(value: unknown): Promise<string> {
     const iv = crypto.getRandomValues(new Uint8Array(12))
     const ct = await crypto.subtle.encrypt(

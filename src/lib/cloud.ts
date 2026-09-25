@@ -44,17 +44,20 @@ interface Index {
   files: Record<string, number>
 }
 
-async function bumpIndex(file: string) {
-  if (!gh || !meLogin) return
+async function bumpIndex(file: string, login?: string) {
+  if (!gh) return
+  const target = login ?? meLogin
+  if (!target) return
   try {
-    const cur = (await gh.read<Index>(up('index.json')))?.data ?? { v: 0, files: {} }
+    const idxPath = `u/${target}/index.json`
+    const cur = (await gh.read<Index>(idxPath))?.data ?? { v: 0, files: {} }
     cur.v = Date.now()
     cur.files[file] = Date.now()
-    await gh.write(up('index.json'), cur, (remote, local) => ({
+    await gh.write(idxPath, cur, (remote, local) => ({
       v: Math.max(remote?.v ?? 0, local.v),
       files: { ...remote?.files, ...local.files },
     }))
-    lastVersion = cur.v
+    if (target === meLogin) lastVersion = cur.v
   } catch {
     /* index bump is best-effort */
   }
@@ -90,6 +93,31 @@ const mergeById =
   }
 
 const byTime = (a: { createdAt: number }, b: { createdAt: number }) => a.createdAt - b.createdAt
+
+/** Users are unique by login — merge registry entries by login, not id. */
+const mergeUsers = (remote: User[] | null, local: User[]): User[] => {
+  const map = new Map<string, User>()
+  for (const u of remote ?? []) map.set(u.login.toLowerCase(), u)
+  for (const u of local) map.set(u.login.toLowerCase(), u)
+  return [...map.values()]
+}
+
+/** login of each human member of a chat (bots live only in the registry). */
+async function memberLogins(memberIds: string[]): Promise<string[]> {
+  if (!gh) return meLogin ? [meLogin] : []
+  const users = (await gh.read<User[]>('users.json'))?.data ?? []
+  const byId = new Map(users.map(u => [u.id, u]))
+  const out: string[] = []
+  for (const id of memberIds) {
+    const u = byId.get(id)
+    if (u && !u.bot) out.push(u.login)
+  }
+  return out
+}
+
+/** path of the shared message file — always in the chat owner's namespace */
+const msgPath = (chatId: string, ownerLogin?: string) =>
+  `u/${ownerLogin ?? meLogin}/m/${chatId}.json`
 
 export const cloud = {
   configure(cfg: SyncConfig | null, login: string | null) {
@@ -132,7 +160,7 @@ export const cloud = {
       const i = list.findIndex(x => x.id === u.id || x.login === u.login)
       if (i >= 0) list[i] = u
       else list.push(u)
-      await gh.write('users.json', list, mergeById<User>())
+      await gh.write('users.json', list, mergeUsers)
       return
     }
     const users = readLocal<User[]>('users', [])
@@ -154,19 +182,47 @@ export const cloud = {
   },
   async saveChat(c: Chat) {
     if (gh && meLogin) {
-      const list = (await gh.read<Chat[]>(up('chats.json')))?.data ?? []
-      const i = list.findIndex(x => x.id === c.id)
-      if (i >= 0) list[i] = c
-      else list.push(c)
-      await gh.write(up('chats.json'), list, mergeById<Chat>(byTime))
-      await bumpIndex('chats.json')
+      // every member gets the chat record in their own namespace
+      for (const login of await memberLogins(c.memberIds)) {
+        const path = `u/${login}/chats.json`
+        const list = (await gh.read<Chat[]>(path))?.data ?? []
+        const i = list.findIndex(x => x.id === c.id)
+        if (i >= 0) list[i] = c
+        else list.push(c)
+        await gh.write(path, list, mergeById<Chat>(byTime))
+        await bumpIndex('chats.json', login)
+      }
       return
     }
     const chats = readLocal<Chat[]>('chats', [])
-    const i = chats.findIndex(x => x.id === c.id)
+       const i = chats.findIndex(x => x.id === c.id)
     if (i >= 0) chats[i] = c
     else chats.push(c)
     writeLocal('chats', chats)
+  },
+
+  /** Public channel registry — what the "Канал" tab lists for everyone. */
+  async channels(): Promise<Chat[]> {
+    if (gh) {
+      const r = await gh.read<Chat[]>('channels.json')
+      return r?.data ?? []
+    }
+    return readLocal<Chat[]>('channels', [])
+  },
+  async registerChannel(c: Chat) {
+    if (gh) {
+      const list = (await gh.read<Chat[]>('channels.json'))?.data ?? []
+      const i = list.findIndex(x => x.id === c.id)
+      if (i >= 0) list[i] = c
+      else list.push(c)
+      await gh.write('channels.json', list, mergeById<Chat>(byTime))
+      return
+    }
+    const list = readLocal<Chat[]>('channels', [])
+    const i = list.findIndex(x => x.id === c.id)
+    if (i >= 0) list[i] = c
+    else list.push(c)
+    writeLocal('channels', list)
   },
   async deleteChat(chatId: string) {
     if (gh && meLogin) {
@@ -193,28 +249,30 @@ export const cloud = {
     )
   },
 
-  async messages(chatId?: string): Promise<Message[]> {
+  async messages(chatId?: string, ownerLogin?: string): Promise<Message[]> {
     if (gh && meLogin) {
       if (chatId) {
-        const r = await gh.read<Message[]>(up(`m/${chatId}.json`))
+        const r = await gh.read<Message[]>(msgPath(chatId, ownerLogin))
         return r?.data ?? []
       }
       const chats = await this.chats()
       const parts = await Promise.all(
-        chats.map(c => gh!.read<Message[]>(up(`m/${c.id}.json`)).then(r => r?.data ?? [])),
+        chats.map(c =>
+          gh!.read<Message[]>(msgPath(c.id, c.ownerLogin)).then(r => r?.data ?? []),
+        ),
       )
       return parts.flat()
     }
     const all = readLocal<Message[]>('messages', [])
     return chatId ? all.filter(m => m.chatId === chatId) : all
   },
-  async appendMessage(m: Message) {
+  async appendMessage(m: Message, ownerLogin?: string) {
     if (gh && meLogin) {
-      const path = up(`m/${m.chatId}.json`)
+      const path = msgPath(m.chatId, ownerLogin)
       const list = (await gh.read<Message[]>(path))?.data ?? []
       list.push(m)
       await gh.write(path, list, mergeById<Message>(byTime))
-      await bumpIndex(`m/${m.chatId}.json`)
+      await bumpIndex(`m/${m.chatId}.json`, ownerLogin)
       return
     }
     const all = readLocal<Message[]>('messages', [])
@@ -225,12 +283,12 @@ export const cloud = {
     if (gh && meLogin) {
       const chats = await this.chats()
       for (const c of chats) {
-        const path = up(`m/${c.id}.json`)
+        const path = msgPath(c.id, c.ownerLogin)
         const list = (await gh.read<Message[]>(path))?.data ?? []
         const next = list.filter(m => m.id !== id)
         if (next.length !== list.length) {
           await gh.write(path, next, (_r, l) => l)
-          await bumpIndex(`m/${c.id}.json`)
+          await bumpIndex(`m/${c.id}.json`, c.ownerLogin)
           break
         }
       }
@@ -241,15 +299,15 @@ export const cloud = {
       readLocal<Message[]>('messages', []).filter(m => m.id !== id),
     )
   },
-  async updateMessage(m: Message) {
+  async updateMessage(m: Message, ownerLogin?: string) {
     if (gh && meLogin) {
-      const path = up(`m/${m.chatId}.json`)
+      const path = msgPath(m.chatId, ownerLogin)
       const list = (await gh.read<Message[]>(path))?.data ?? []
       const i = list.findIndex(x => x.id === m.id)
       if (i >= 0) {
         list[i] = m
         await gh.write(path, list, mergeById<Message>(byTime))
-        await bumpIndex(`m/${m.chatId}.json`)
+        await bumpIndex(`m/${m.chatId}.json`, ownerLogin)
       }
       return
     }

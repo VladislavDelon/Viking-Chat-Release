@@ -129,6 +129,15 @@ export function Sidebar() {
         </div>
       </div>
 
+      {user && (
+        <button className="me-chip" onClick={() => setShowSettings(true)}>
+          <Avatar name={user.name} color={user.color} size={30} src={user.avatar} />
+          <span className="me-name">{user.name}</span>
+          <span className="me-login">@{user.login}</span>
+          <Settings size={14} className="me-gear" />
+        </button>
+      )}
+
       <div className="search-box">
         <Search size={16} />
         <input

@@ -5,32 +5,44 @@ import { X, Users, Megaphone, MessageCircle, Check, Search } from 'lucide-react'
 import { useStore } from '../store/useStore'
 import { cloud } from '../lib/cloud'
 import { Avatar } from './Avatar'
-import type { ChatKind, User } from '../types'
+import type { Chat, ChatKind, User } from '../types'
 
 export function NewChatModal({ onClose }: { onClose: () => void }) {
-  const { user, chats, createChat, openChat } = useStore()
+  const { user, chats, createChat, joinChannel, openChat } = useStore()
   const [kind, setKind] = useState<ChatKind>('direct')
   const [title, setTitle] = useState('')
   const [selected, setSelected] = useState<string[]>([])
   const [allUsers, setAllUsers] = useState<User[]>([])
+  const [channels, setChannels] = useState<Chat[]>([])
   const [query, setQuery] = useState('')
 
   useEffect(() => {
     void cloud.users().then(setAllUsers)
+    void cloud.channels().then(setChannels)
   }, [])
 
+  // people are private — they only appear after you actually search for them
   const contacts = useMemo(() => {
     const q = query.trim().toLowerCase().replace(/^@/, '')
+    if (!q) return []
     return allUsers
-      .filter(u => u.id !== user?.id && !u.bot)
       .filter(
         u =>
-          !q ||
-          u.login.toLowerCase().includes(q) ||
-          u.name.toLowerCase().includes(q),
+          u.id !== user?.id &&
+          !u.bot &&
+          u.login.toLowerCase() !== user?.login.toLowerCase(),
       )
+      .filter(u => u.login.toLowerCase().includes(q) || u.name.toLowerCase().includes(q))
       .slice(0, 30)
-  }, [allUsers, query, user?.id])
+  }, [allUsers, query, user?.id, user?.login])
+
+  // public channels can be browsed — they are public by definition
+  const channelList = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    return channels
+      .filter(c => !q || c.title.toLowerCase().includes(q))
+      .slice(0, 30)
+  }, [channels, query])
 
   const existingDirect = (contactId: string) =>
     chats.find(
@@ -55,6 +67,13 @@ export function NewChatModal({ onClose }: { onClose: () => void }) {
     } else {
       await createChat(kind, title || (kind === 'group' ? 'Новая группа' : 'Новый канал'), selected)
     }
+    onClose()
+  }
+
+  async function openChannel(c: Chat) {
+    const mine = chats.find(x => x.id === c.id)
+    if (mine) openChat(mine.id)
+    else await joinChannel(c)
     onClose()
   }
 
@@ -97,21 +116,28 @@ export function NewChatModal({ onClose }: { onClose: () => void }) {
           </button>
         </div>
 
-        {kind !== 'channel' && (
-          <div className="search-box inset">
-            <Search size={15} />
-            <input
-              placeholder="Поиск по никнейму"
-              value={query}
-              onChange={e => setQuery(e.target.value)}
-            />
-          </div>
-        )}
+        <div className="search-box inset">
+          <Search size={15} />
+          <input
+            placeholder={kind === 'channel' ? 'Поиск канала' : 'Поиск по никнейму'}
+            value={query}
+            onChange={e => setQuery(e.target.value)}
+          />
+        </div>
 
-        {kind !== 'direct' && (
+        {kind === 'group' && (
           <input
             className="input"
-            placeholder={kind === 'group' ? 'Название группы' : 'Название канала'}
+            placeholder="Название группы"
+            value={title}
+            onChange={e => setTitle(e.target.value)}
+          />
+        )}
+
+        {kind === 'channel' && (
+          <input
+            className="input"
+            placeholder="Название нового канала"
             value={title}
             onChange={e => setTitle(e.target.value)}
           />
@@ -133,18 +159,30 @@ export function NewChatModal({ onClose }: { onClose: () => void }) {
                 {selected.includes(c.id) && <Check size={17} className="check" />}
               </button>
             ))}
-            {contacts.length === 0 && (
-              <p className="empty-list">
-                {query ? 'Пользователь не найден' : 'Нет пользователей'}
-              </p>
+            {!query.trim() && (
+              <p className="empty-list">Введите никнейм — подходящие люди появятся здесь</p>
+            )}
+            {query.trim() && contacts.length === 0 && (
+              <p className="empty-list">Пользователь не найден</p>
             )}
           </div>
         )}
 
-        {kind === 'channel' && (
-          <p className="modal-hint">
-            Канал — для публикаций на неограниченную аудиторию. Писать могут только владельцы.
-          </p>
+        {kind === 'channel' && channelList.length > 0 && (
+          <div className="contact-list">
+            {channelList.map(c => (
+              <button key={c.id} className="contact" onClick={() => openChannel(c)}>
+                <Avatar name={c.title} color={c.color} size={38} />
+                <div className="contact-info">
+                  <span>{c.title}</span>
+                  <span className="contact-login">
+                    {c.memberIds.length} подписчик(ов)
+                  </span>
+                </div>
+                <Megaphone size={15} className="check" />
+              </button>
+            ))}
+          </div>
         )}
 
         <button className="btn primary" disabled={!canCreate} onClick={create}>

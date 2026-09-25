@@ -1,8 +1,9 @@
 /**
- * End-to-end cloud sync smoke test — simulates two devices against the real
- * private repo. Run: node scripts/cloud-smoke.mjs  (GH_TOKEN env required)
- * Device A registers + writes encrypted chat data; Device B reads it back and
- * decrypts with the account key — the exact flow of logging in elsewhere.
+ * End-to-end cloud sync smoke test — simulates two DEVICES/USERS against the
+ * real private repo. A registers, creates a DM with B, writes an encrypted
+ * message into the shared (owner's) file; B finds the chat in his own
+ * namespace, reads the owner's message file and decrypts with the chat key.
+ * Run: GH_TOKEN=... node scripts/cloud-smoke.mjs
  */
 const TOKEN = process.env.GH_TOKEN
 const REPO = process.env.GH_REPO || 'VladislavDelon/Viking-Chat-Closed'
@@ -19,10 +20,7 @@ const b64enc = s => btoa(unescape(encodeURIComponent(s)))
 const b64dec = s => decodeURIComponent(escape(atob(s)))
 
 const url = p => `https://api.github.com/repos/${REPO}/contents/${encodeURIComponent(p)}`
-const H = {
-  Authorization: `Bearer ${TOKEN}`,
-  Accept: 'application/vnd.github+json',
-}
+const H = { Authorization: `Bearer ${TOKEN}`, Accept: 'application/vnd.github+json' }
 
 async function ghRead(path) {
   const r = await fetch(url(path), { headers: H })
@@ -64,7 +62,6 @@ const generateAccountKey = () =>
     .slice(0, 20)
     .replace(/(.{4})/g, '$1-')
     .slice(0, -1)}`
-const normalizeKey = k => k.trim().toUpperCase().replace(/\s+/g, '')
 
 async function hashPassword(password, salt) {
   const key = await crypto.subtle.importKey('raw', te.encode(password), 'PBKDF2', false, [
@@ -77,17 +74,23 @@ async function hashPassword(password, salt) {
   )
   return b64(bits)
 }
-
-async function vaultKey(accountKey) {
-  const digest = await crypto.subtle.digest('SHA-256', te.encode(normalizeKey(accountKey)))
+async function aesKey(seedStr) {
+  const digest = await crypto.subtle.digest('SHA-256', te.encode(seedStr))
   return crypto.subtle.importKey('raw', digest, { name: 'AES-GCM' }, false, [
     'encrypt',
     'decrypt',
   ])
 }
+const vaultKey = ak => aesKey(ak.trim().toUpperCase().replace(/\s+/g, ''))
+const chatKey = id => aesKey(`viking.chatkey.${id}`)
+
 async function encryptJson(key, value) {
   const iv = crypto.getRandomValues(new Uint8Array(12))
-  const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, te.encode(JSON.stringify(value)))
+  const ct = await crypto.subtle.encrypt(
+    { name: 'AES-GCM', iv },
+    key,
+    te.encode(JSON.stringify(value)),
+  )
   return `${b64(iv)}.${b64(ct)}`
 }
 async function decryptJson(key, enc) {
@@ -96,89 +99,97 @@ async function decryptJson(key, enc) {
   return JSON.parse(td.decode(pt))
 }
 
-const login = `smoke_${Date.now().toString(36)}`
-const password = 'test-parol-123'
-const accountKey = generateAccountKey()
-const userId = crypto.randomUUID()
+const suffix = Date.now().toString(36)
+const A = { login: `smoke_a_${suffix}`, password: 'pw-a', key: generateAccountKey() }
+const B = { login: `smoke_b_${suffix}`, password: 'pw-b', key: generateAccountKey() }
 const chatId = crypto.randomUUID()
 
-console.log(`\n=== DEVICE A: register + write encrypted data ===`)
-try {
-  // register: user record in users.json
+async function registerUser(u) {
   const salt = randomSalt()
-  const user = {
-    id: userId,
-    login,
-    name: 'Smoke Test',
+  u.id = crypto.randomUUID()
+  u.record = {
+    id: u.id,
+    login: u.login,
+    name: `Smoke ${u.login.slice(-4)}`,
     color: '#5b8cff',
-    passwordHash: await hashPassword(password, salt),
+    passwordHash: await hashPassword(u.password, salt),
     salt,
     createdAt: Date.now(),
   }
   const users = (await ghRead('users.json'))?.data ?? []
-  users.push(user)
+  users.push(u.record)
   await ghWrite('users.json', users)
-  console.log(`✔ users.json updated (${users.length} users)`)
+}
 
-  // chat list
+console.log('\n=== REGISTER A and B ===')
+try {
+  await registerUser(A)
+  await registerUser(B)
+  console.log('✔ both users in registry')
+
+  console.log('\n=== A creates a DM with B (member namespaces) ===')
   const chat = {
     id: chatId,
     kind: 'direct',
-    title: 'Smoke Chat',
-    memberIds: [userId],
-    ownerId: userId,
+    title: 'DM',
+    memberIds: [A.id, B.id],
+    ownerId: A.id,
+    ownerLogin: A.login,
     color: '#5b8cff',
     createdAt: Date.now(),
   }
-  await ghWrite(`u/${login}/chats.json`, [chat])
-  console.log('✔ chats.json written')
-
-  // encrypted message — only ciphertext touches the repo
-  const key = await vaultKey(accountKey)
-  const secret = 'Секретное сообщение викинга ⚔️'
-  const msg = {
-    id: crypto.randomUUID(),
-    chatId,
-    senderId: userId,
-    createdAt: Date.now(),
-    enc: await encryptJson(key, { t: secret }),
-    status: 'sent',
+  for (const login of [A.login, B.login]) {
+    const path = `u/${login}/chats.json`
+    const list = (await ghRead(path))?.data ?? []
+    list.push(chat)
+    await ghWrite(path, list)
   }
-  await ghWrite(`u/${login}/m/${chatId}.json`, [msg])
-  console.log('✔ message written — ciphertext:', msg.enc.slice(0, 44) + '…')
+  console.log('✔ chat record written to u/A and u/B')
 
-  console.log(`\n=== DEVICE B: fresh login elsewhere ===`)
-  // 1. find user by login (what login() does)
-  const remoteUsers = (await ghRead('users.json'))?.data ?? []
-  const found = remoteUsers.find(u => u.login === login)
-  if (!found) throw new Error('user not found remotely')
-  console.log('✔ user found in remote registry')
+  console.log('\n=== A sends a message (owner namespace, chat key) ===')
+  const secret = 'Привет от викинга A ⚔️'
+  const ck = await chatKey(chatId)
+  await ghWrite(`u/${A.login}/m/${chatId}.json`, [
+    {
+      id: crypto.randomUUID(),
+      chatId,
+      senderId: A.id,
+      createdAt: Date.now(),
+      enc: await encryptJson(ck, { t: secret }),
+      status: 'sent',
+    },
+  ])
+  console.log('✔ ciphertext in u/A/m/', chatId.slice(0, 8), '…')
 
-  // 2. password check
-  const ok = (await hashPassword(password, found.salt)) === found.passwordHash
-  if (!ok) throw new Error('password hash mismatch')
-  console.log('✔ password verified')
+  console.log('\n=== B logs in elsewhere: registry → password → chats → decrypt ===')
+  const users = (await ghRead('users.json'))?.data ?? []
+  const foundB = users.find(u => u.login === B.login)
+  if (!foundB) throw new Error('B missing from registry')
+  if ((await hashPassword(B.password, foundB.salt)) !== foundB.passwordHash)
+    throw new Error('B password check failed')
+  console.log('✔ B authenticated')
 
-  // 3. pull chats + messages
-  const chats = (await ghRead(`u/${login}/chats.json`))?.data ?? []
-  const msgs = (await ghRead(`u/${login}/m/${chatId}.json`))?.data ?? []
-  if (!chats.length || !msgs.length) throw new Error('remote data missing')
-  console.log(`✔ pulled ${chats.length} chat(s), ${msgs.length} message(s)`)
+  const bChats = (await ghRead(`u/${B.login}/chats.json`))?.data ?? []
+  const dm = bChats.find(c => c.id === chatId)
+  if (!dm) throw new Error('chat did not reach B')
+  console.log('✔ B sees the chat in his own namespace')
 
-  // 4. decrypt with the account key (what submitKey does on a new device)
-  const key2 = await vaultKey(accountKey)
-  const payload = await decryptJson(key2, msgs[0].enc)
-  if (payload.t !== secret) throw new Error('decryption mismatch')
-  console.log('✔ decrypted payload:', payload.t)
+  const msgs = (await ghRead(`u/${dm.ownerLogin}/m/${chatId}.json`))?.data ?? []
+  if (!msgs.length) throw new Error('owner message file empty')
+  const payload = await decryptJson(await chatKey(chatId), msgs[0].enc)
+  if (payload.t !== secret) throw new Error('decrypt mismatch')
+  console.log('✔ B decrypts with the chat key:', payload.t)
 
-  console.log('\n=== cleanup: delete account (device-side flow) ===')
-  const kept = remoteUsers.filter(u => u.id !== userId)
+  console.log('\n=== cleanup ===')
+  const kept = users.filter(u => u.id !== A.id && u.id !== B.id)
   await ghWrite('users.json', kept)
-  await ghDelete(`u/${login}/m/${chatId}.json`)
-  await ghDelete(`u/${login}/chats.json`)
-  console.log('✔ test account + data removed')
+  for (const login of [A.login, B.login]) {
+    await ghDelete(`u/${login}/chats.json`)
+    await ghDelete(`u/${login}/m/${chatId}.json`)
+  }
+  console.log('✔ test data removed')
 
-  console.log('\nALL CHECKS PASSED — cross-device sync works end to end.')
+  console.log('\nALL CHECKS PASSED — real user↔user messaging works over the repo.')
 } catch (e) {
   console.error('\n✘ FAILED:', e.message)
   process.exit(1)

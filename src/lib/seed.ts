@@ -58,7 +58,7 @@ export async function ensureSupportBot(): Promise<User> {
 }
 
 /** Creates "Избранное", "Viking помощь" and "Viking News" for a new account. */
-export async function seedFor(user: User, vault: Vault): Promise<Chat[]> {
+export async function seedFor(user: User): Promise<Chat[]> {
   let now = Date.now()
   const support = await ensureSupportBot()
 
@@ -68,6 +68,7 @@ export async function seedFor(user: User, vault: Vault): Promise<Chat[]> {
     title: 'Избранное',
     memberIds: [user.id],
     ownerId: user.id,
+    ownerLogin: user.login,
     color: '#4fc3f7',
     pinned: true,
     createdAt: now,
@@ -78,7 +79,8 @@ export async function seedFor(user: User, vault: Vault): Promise<Chat[]> {
     kind: 'group',
     title: 'Viking помощь',
     memberIds: [user.id, support.id],
-    ownerId: support.id,
+    ownerId: user.id,
+    ownerLogin: user.login,
     color: '#7c5bff',
     description: 'Вопросы о программе — отвечаем и помогаем',
     createdAt: now,
@@ -90,6 +92,7 @@ export async function seedFor(user: User, vault: Vault): Promise<Chat[]> {
     title: 'Viking News',
     memberIds: [user.id],
     ownerId: user.id,
+    ownerLogin: user.login,
     color: '#3fb6b2',
     description: 'Новости и обновления Viking Chat',
     createdAt: now,
@@ -112,15 +115,18 @@ export async function seedFor(user: User, vault: Vault): Promise<Chat[]> {
   ]
   for (const [chat, sender, text] of posts) {
     const payload = { t: text }
-    await cloud.appendMessage({
-      id: uid(),
-      chatId: chat.id,
-      senderId: sender,
-      createdAt: (now -= 60_000),
-      enc: await vault.encryptJson(payload),
-      status: 'delivered',
-      payload,
-    })
+    await cloud.appendMessage(
+      {
+        id: uid(),
+        chatId: chat.id,
+        senderId: sender,
+        createdAt: (now -= 60_000),
+        enc: await (await Vault.forChat(chat.id)).encryptJson(payload),
+        status: 'delivered',
+        payload,
+      },
+      chat.ownerLogin,
+    )
   }
 
   return [saved, help, news]

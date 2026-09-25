@@ -134,6 +134,13 @@ html[data-season='autumn'] .auth-bg {
   transition: border-color 0.2s, box-shadow 0.2s;
 }
 .input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(88, 182, 255, 0.15); }
+/* keep browser autofill from painting inputs light-blue/white */
+.input:-webkit-autofill,
+.pwd-wrap input:-webkit-autofill {
+  -webkit-text-fill-color: var(--text);
+  -webkit-box-shadow: 0 0 0 40px var(--input) inset;
+  caret-color: var(--text);
+}
 .auth-error { color: #ff7b8a; font-size: 13px; margin-bottom: 10px; }
 .btn {
   width: 100%; padding: 12px; border-radius: 12px; font-weight: 700;
@@ -394,6 +401,11 @@ html[data-season='autumn'] .auth-bg {
   display: flex; align-items: center; gap: 7px; font-size: 12px; font-weight: 700;
   text-transform: uppercase; letter-spacing: 0.8px; color: var(--text2); margin-bottom: 12px;
 }
+.set-subtitle {
+  display: flex; align-items: center; gap: 6px; font-size: 12.5px;
+  color: var(--text2); margin-bottom: 10px; flex-wrap: wrap;
+}
+.set-subtitle b { color: var(--accent); font-weight: 600; }
 .set-profile { display: flex; gap: 14px; align-items: flex-start; margin-bottom: 4px; }
 .avatar-edit { position: relative; flex-shrink: 0; border-radius: 50%; }
 .avatar-edit-badge {
@@ -432,6 +444,16 @@ html[data-season='autumn'] .auth-bg {
   display: grid; place-items: center; padding: 6px; border-radius: 8px;
 }
 .pwd-eye:hover { color: var(--text); }
+.me-chip {
+  display: flex; align-items: center; gap: 9px; width: 100%;
+  padding: 7px 10px; margin-bottom: 10px; border-radius: 12px;
+  background: var(--input); border: 1px solid var(--border);
+  color: var(--text); text-align: left; transition: border-color 0.15s, background 0.15s;
+}
+.me-chip:hover { border-color: var(--accent); background: var(--panel-solid); }
+.me-name { font-weight: 600; font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.me-login { color: var(--text2); font-size: 11.5px; margin-left: auto; flex-shrink: 0; }
+.me-gear { color: var(--text2); flex-shrink: 0; }
 .auth-sync-toggle {
   display: flex; align-items: center; gap: 6px; margin-top: 12px; width: 100%;
   background: none; border: none; color: var(--text2); font-size: 12px;

@@ -20,6 +20,8 @@ export interface Chat {
   title: string
   memberIds: string[]
   ownerId: string
+  /** login whose namespace hosts the shared message file */
+  ownerLogin?: string
   color: string
   description?: string
   pinned?: boolean

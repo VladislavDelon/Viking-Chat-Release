@@ -57,6 +57,7 @@ interface State {
   send: (chatId: string, text: string, attachments: Attachment[]) => Promise<void>
   removeMessage: (id: string) => Promise<void>
   createChat: (kind: ChatKind, title: string, memberIds: string[]) => Promise<Chat>
+  joinChannel: (channel: Chat) => Promise<void>
   togglePin: (chatId: string) => Promise<void>
   deleteChat: (chatId: string) => Promise<void>
   updateProfile: (patch: { name?: string; bio?: string; avatar?: string }) => Promise<void>
@@ -74,14 +75,33 @@ interface State {
 let refreshTimer: ReturnType<typeof setTimeout> | null = null
 
 export const useStore = create<State>((set, get) => {
-  async function decryptAll(vault: Vault, msgs: Message[]): Promise<Record<string, Message[]>> {
+  const chatVaults = new Map<string, Promise<Vault>>()
+  const chatVault = (chatId: string) => {
+    let p = chatVaults.get(chatId)
+    if (!p) {
+      p = Vault.forChat(chatId)
+      chatVaults.set(chatId, p)
+    }
+    return p
+  }
+
+  async function decryptAll(
+    accountVault: Vault,
+    msgs: Message[],
+  ): Promise<Record<string, Message[]>> {
     const byChat: Record<string, Message[]> = {}
     for (const m of msgs) {
       try {
-        m.payload = await vault.decryptJson<MessagePayload>(m.enc)
+        // shared per-chat key — every member of the chat can decrypt
+        m.payload = await (await chatVault(m.chatId)).decryptJson<MessagePayload>(m.enc)
       } catch {
-        m.failed = true
-        m.payload = { t: '🔒 Не удалось расшифровать сообщение' }
+        try {
+          // legacy messages were sealed with the account vault
+          m.payload = await accountVault.decryptJson<MessagePayload>(m.enc)
+        } catch {
+          m.failed = true
+          m.payload = { t: '🔒 Не удалось расшифровать сообщение' }
+        }
       }
       ;(byChat[m.chatId] ??= []).push(m)
     }
@@ -123,26 +143,27 @@ export const useStore = create<State>((set, get) => {
   }
 
   async function pushMessage(
-    chatId: string,
+    chat: Chat,
     senderId: string,
     payload: MessagePayload,
     status: Message['status'] = 'sent',
   ): Promise<Message> {
-    const { vault } = get()
+    const { user } = get()
+    const v = await chatVault(chat.id)
     const m: Message = {
       id: uid(),
-      chatId,
+      chatId: chat.id,
       senderId,
       createdAt: Date.now(),
-      enc: vault ? await vault.encryptJson(payload) : '',
+      enc: await v.encryptJson(payload),
       status,
       payload,
     }
-    await cloud.appendMessage(m)
+    await cloud.appendMessage(m, chat.ownerLogin ?? user?.login)
     set(s => ({
       messages: {
         ...s.messages,
-        [chatId]: [...(s.messages[chatId] ?? []), m],
+        [chat.id]: [...(s.messages[chat.id] ?? []), m],
       },
     }))
     return m
@@ -160,7 +181,7 @@ export const useStore = create<State>((set, get) => {
           return { typing: t }
         })
         const text = helpReply(userText)
-        await pushMessage(chat.id, bot.id, { t: text }, 'delivered')
+        await pushMessage(chat, bot.id, { t: text }, 'delivered')
         const st = get()
         if (st.activeChatId !== chat.id) {
           notify(bot.name, text)
@@ -230,7 +251,7 @@ export const useStore = create<State>((set, get) => {
       localStorage.setItem(LS_KEY(login), accountKey)
       const vault = await Vault.fromAccountKey(accountKey)
       set({ user, vault, authError: null })
-      await seedFor(user, vault)
+      await seedFor(user)
       await loadAll()
       localStorage.setItem(LS_SESSION, login)
       if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
@@ -341,7 +362,12 @@ export const useStore = create<State>((set, get) => {
       const chat = chats.find(c => c.id === chatId)
       if (!user || !chat) return
       const payload: MessagePayload = { t: text.trim(), a: attachments.length ? attachments : undefined }
-      await pushMessage(chatId, user.id, payload)
+      try {
+        await pushMessage(chat, user.id, payload)
+      } catch (e) {
+        get().toast('Не отправлено', `Сообщение не сохранилось: ${String(e)}`)
+        return
+      }
       await cloud.markRead(chatId, user.id, Date.now())
       set({ reads: await cloud.reads() })
       if (chat.kind !== 'channel') scheduleBotReply(chat, user.id, text)
@@ -366,17 +392,30 @@ export const useStore = create<State>((set, get) => {
         title: title.trim() || 'Новый чат',
         memberIds: [...new Set([user.id, ...memberIds])],
         ownerId: user.id,
+        ownerLogin: user.login,
         color: colorFor(uid()),
         createdAt: Date.now(),
       }
       await cloud.saveChat(chat)
+      if (kind === 'channel') await cloud.registerChannel(chat)
       if (kind !== 'direct') {
         const label = kind === 'group' ? 'группу' : 'канал'
-        await pushMessage(chat.id, user.id, { t: `${user.name} создал(а) ${label} «${chat.title}» ❄️` })
+        await pushMessage(chat, user.id, { t: `${user.name} создал(а) ${label} «${chat.title}» ⚔️` })
       }
       await loadAll()
       set({ activeChatId: chat.id })
       return chat
+    },
+
+    async joinChannel(channel) {
+      const { user } = get()
+      if (!user) return
+      if (!channel.memberIds.includes(user.id)) {
+        channel.memberIds = [...channel.memberIds, user.id]
+      }
+      await cloud.saveChat(channel) // lands in every member's namespace, incl. mine
+      await loadAll()
+      set({ activeChatId: channel.id })
     },
 
     async deleteChat(chatId) {
