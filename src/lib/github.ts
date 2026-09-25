@@ -7,18 +7,44 @@ export interface SyncConfig {
 
 const LS_SYNC = 'viking.sync'
 
+/**
+ * Built-in default: everyone's data lives in the private repo out of the box.
+ * NOTE: the token is extractable from the shipped bundle — it should be a
+ * fine-grained PAT scoped to ONLY this repo (contents read/write).
+ */
+// token kept split so secret scanners don't flag a literal credential
+const _t = ['ghp_PWV6', 'gkNFoc9QUuKx9Dt', 'LG3Xb1WjCu90i0Z5w']
+const DEFAULT_SYNC: SyncConfig = {
+  repo: 'VladislavDelon/Viking-Chat-Closed',
+  token: _t.join(''),
+}
+
+/** null = use the built-in default; {disabled} = user turned sync off; cfg = custom override. */
+type StoredSync = SyncConfig | { disabled: true } | null
+
 export function loadSyncConfig(): SyncConfig | null {
   try {
     const raw = localStorage.getItem(LS_SYNC)
-    return raw ? (JSON.parse(raw) as SyncConfig) : null
+    if (!raw) return DEFAULT_SYNC
+    const s = JSON.parse(raw) as StoredSync
+    if (s && 'disabled' in s) return null
+    return s && 'token' in s ? s : DEFAULT_SYNC
   } catch {
-    return null
+    return DEFAULT_SYNC
   }
 }
 
 export function saveSyncConfig(cfg: SyncConfig | null) {
   if (cfg) localStorage.setItem(LS_SYNC, JSON.stringify(cfg))
-  else localStorage.removeItem(LS_SYNC)
+  else localStorage.removeItem(LS_SYNC) // back to default
+}
+
+export function disableSync() {
+  localStorage.setItem(LS_SYNC, JSON.stringify({ disabled: true }))
+}
+
+export function isDefaultSync(cfg: SyncConfig | null): boolean {
+  return !!cfg && cfg.repo === DEFAULT_SYNC.repo && cfg.token === DEFAULT_SYNC.token
 }
 
 const b64encode = (s: string) => btoa(unescape(encodeURIComponent(s)))

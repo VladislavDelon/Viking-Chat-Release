@@ -45,12 +45,11 @@ export function AuthScreen() {
       const cfg = { token: syncToken.trim(), repo: syncRepo.trim() }
       saveSyncConfig(cfg)
       cloud.configure(cfg, null)
-      setSynced(true)
     } else {
-      saveSyncConfig(null)
-      cloud.configure(null, null)
-      setSynced(false)
+      saveSyncConfig(null) // revert to the built-in default repo
+      cloud.configure(loadSyncConfig(), null)
     }
+    setSynced(true)
   }
 
   async function doLogin() {
@@ -196,7 +195,9 @@ export function AuthScreen() {
 
               <button className="auth-sync-toggle" onClick={() => setSyncOpen(v => !v)}>
                 <Cloud size={13} />
-                {synced ? 'Облако подключено' : 'Подключить облако для входа с нового устройства'}
+                {synced
+                  ? 'Облако подключено — данные синхронизируются'
+                  : 'Облако отключено — данные только на этом устройстве'}
                 <span className={`sync-dot ${synced ? 'on' : ''}`} />
               </button>
               {syncOpen && (
@@ -213,12 +214,12 @@ export function AuthScreen() {
                     onChange={setSyncToken}
                     onEnter={saveSync}
                   />
-                  <button className="btn primary" onClick={saveSync} disabled={!syncToken.trim()}>
+                  <button className="btn primary" onClick={saveSync}>
                     Сохранить подключение
                   </button>
                   <div className="auth-hint">
-                    На новом устройстве введите тот же токен и репозиторий — переписка подтянется из
-                    облака после входа.
+                    По умолчанию используется встроенное приватное облако — поля можно не
+                    заполнять. После входа с ключом VKNG-… переписка подтянется автоматически.
                   </div>
                 </div>
               )}

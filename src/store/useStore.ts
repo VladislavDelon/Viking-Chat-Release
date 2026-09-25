@@ -1,6 +1,11 @@
 import { create } from 'zustand'
 import { cloud } from '../lib/cloud'
-import { loadSyncConfig, saveSyncConfig, type SyncConfig } from '../lib/github'
+import {
+  loadSyncConfig,
+  saveSyncConfig,
+  disableSync,
+  type SyncConfig,
+} from '../lib/github'
 import {
   Vault,
   generateAccountKey,
@@ -58,6 +63,7 @@ interface State {
   changeLogin: (newLogin: string) => Promise<string | null>
   changePassword: (current: string, next: string) => Promise<string | null>
   connectSync: (cfg: SyncConfig | null) => Promise<string | null>
+  disconnectSync: () => Promise<void>
   deleteAccount: (password: string) => Promise<string | null>
   setTheme: (t: Theme) => void
   toast: (title: string, body: string) => void
@@ -293,6 +299,13 @@ export const useStore = create<State>((set, get) => {
       }
       if (user) await loadAll()
       return null
+    },
+
+    async disconnectSync() {
+      disableSync()
+      const { user } = get()
+      cloud.configure(null, user?.login ?? null)
+      if (user) await loadAll()
     },
 
     async deleteAccount(password) {

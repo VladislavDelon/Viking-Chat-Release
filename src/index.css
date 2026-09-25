@@ -440,6 +440,12 @@ html[data-season='autumn'] .auth-bg {
 .auth-sync-toggle:hover { color: var(--accent); }
 .auth-sync { margin-top: 10px; display: flex; flex-direction: column; gap: 8px; }
 .auth-sync .auth-hint { margin-top: 2px; }
+.sync-details { margin-bottom: 10px; }
+.sync-details summary {
+  cursor: pointer; color: var(--text2); font-size: 12.5px; margin-bottom: 10px;
+  user-select: none;
+}
+.sync-details summary:hover { color: var(--accent); }
 .sync-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--text2); margin-left: auto; }
 .sync-dot.on { background: #4ade80; box-shadow: 0 0 8px #4ade80; }
 

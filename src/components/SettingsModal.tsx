@@ -20,7 +20,7 @@ import {
   Trash2,
 } from 'lucide-react'
 import { accountKeyFor, useStore } from '../store/useStore'
-import { loadSyncConfig } from '../lib/github'
+import { isDefaultSync, loadSyncConfig } from '../lib/github'
 import { downloadAccountKey } from '../lib/download'
 import { Avatar } from './Avatar'
 import { PasswordInput } from './PasswordInput'
@@ -37,6 +37,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
     logout,
     toast,
     connectSync,
+    disconnectSync,
     deleteAccount,
   } = useStore()
   const syncCfg = loadSyncConfig()
@@ -54,6 +55,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
   const [syncToken, setSyncToken] = useState(syncCfg?.token ?? '')
   const [syncErr, setSyncErr] = useState<string | null>(null)
   const [synced, setSynced] = useState(!!syncCfg)
+  const [isDefault, setIsDefault] = useState(isDefaultSync(syncCfg))
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [delPwd, setDelPwd] = useState('')
   const [delErr, setDelErr] = useState<string | null>(null)
@@ -130,12 +132,19 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
     setBusy(false)
     if (err) setSyncErr(err)
     else {
-      setSynced(!!syncToken.trim())
-      toast(
-        syncToken.trim() ? 'Облако подключено' : 'Синхронизация отключена',
-        syncToken.trim() ? syncRepo.trim() : 'Данные хранятся локально',
-      )
+      setSynced(true)
+      setIsDefault(false)
+      toast('Облако подключено', syncRepo.trim())
     }
+  }
+
+  async function disconnect() {
+    setBusy(true)
+    await disconnectSync()
+    setSynced(false)
+    setIsDefault(false)
+    setBusy(false)
+    toast('Синхронизация отключена', 'Данные хранятся только на этом устройстве')
   }
 
   return createPortal(
@@ -253,27 +262,58 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
             <Cloud size={15} /> Облачная синхронизация
             <span className={`sync-dot ${synced ? 'on' : ''}`} />
           </div>
-          <input
-            className="input mono"
-            placeholder="owner/repo"
-            value={syncRepo}
-            onChange={e => setSyncRepo(e.target.value)}
-          />
-          <input
-            className="input mono"
-            type="password"
-            placeholder="GitHub token (repo)"
-            value={syncToken}
-            onChange={e => setSyncToken(e.target.value)}
-          />
-          {syncErr && <div className="auth-error">{syncErr}</div>}
-          <button className="btn primary" disabled={busy} onClick={saveSync}>
-            {synced ? 'Обновить подключение' : 'Подключить облако'}
-          </button>
-          <p className="modal-hint">
-            Переписка хранится в приватном репозитории в зашифрованном виде и синхронизируется между
-            устройствами каждые ~15 сек.
-          </p>
+          {synced ? (
+            <>
+              <p className="modal-hint" style={{ marginTop: 0 }}>
+                ✓ Данные хранятся в приватном репозитории <b className="mono">{syncRepo}</b> в
+                зашифрованном виде и синхронизируются между устройствами каждые ~15 сек.
+                {isDefault && ' Подключено по умолчанию — на другом устройстве просто войдите.'}
+              </p>
+              <details className="sync-details">
+                <summary>Свои настройки облака</summary>
+                <input
+                  className="input mono"
+                  placeholder="owner/repo"
+                  value={syncRepo}
+                  onChange={e => setSyncRepo(e.target.value)}
+                />
+                <PasswordInput
+                  placeholder="GitHub token (repo)"
+                  value={syncToken}
+                  onChange={setSyncToken}
+                />
+                {syncErr && <div className="auth-error">{syncErr}</div>}
+                <button className="btn primary" disabled={busy} onClick={saveSync}>
+                  Обновить подключение
+                </button>
+              </details>
+              <button className="btn danger" disabled={busy} onClick={disconnect}>
+                Отключить синхронизацию
+              </button>
+            </>
+          ) : (
+            <>
+              <p className="modal-hint" style={{ marginTop: 0 }}>
+                Синхронизация отключена — данные хранятся только на этом устройстве.
+              </p>
+              <input
+                className="input mono"
+                placeholder="owner/repo"
+                value={syncRepo}
+                onChange={e => setSyncRepo(e.target.value)}
+              />
+              <PasswordInput
+                placeholder="GitHub token (repo)"
+                value={syncToken}
+                onChange={setSyncToken}
+                onEnter={saveSync}
+              />
+              {syncErr && <div className="auth-error">{syncErr}</div>}
+              <button className="btn primary" disabled={busy} onClick={saveSync}>
+                Подключить облако
+              </button>
+            </>
+          )}
         </div>
 
         <div className="set-section">
