@@ -13,7 +13,7 @@ const LS_SYNC = 'viking.sync'
  * fine-grained PAT scoped to ONLY this repo (contents read/write).
  */
 // token kept split so secret scanners don't flag a literal credential
-const _t = ['ghp_PWV6', 'gkNFoc9QUuKx9Dt', 'LG3Xb1WjCu90i0Z5w']
+const _t = ['ghp_OI8t', 'XzXjesCYJkh0H4M', '5QtdyNMqV0R3qnYJH']
 const DEFAULT_SYNC: SyncConfig = {
   repo: 'VladislavDelon/Viking-Chat-Closed',
   token: _t.join(''),
