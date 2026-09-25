@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Viking Chat — Админ</title>
+<style>
+  :root { --bg:#0b1220; --panel:#111a2e; --input:#0d1526; --border:#233049; --text:#e8edf5; --text2:#8b98ad; --accent:#58b6ff; --red:#ff7b8a; }
+  * { box-sizing:border-box; font-family:'Segoe UI',system-ui,sans-serif; }
+  body { margin:0; min-height:100vh; background:radial-gradient(1200px 600px at 70% -10%,#16294a 0,var(--bg) 55%); color:var(--text); display:flex; align-items:flex-start; justify-content:center; padding:32px 16px; }
+  .card { width:min(960px,100%); background:var(--panel); border:1px solid var(--border); border-radius:18px; padding:24px; }
+  h1 { font-size:22px; margin:0 0 4px; }
+  h1 span { color:var(--accent); }
+  .sub { color:var(--text2); font-size:13px; margin-bottom:20px; }
+  input, select { background:var(--input); border:1px solid var(--border); color:var(--text); border-radius:10px; padding:9px 12px; font-size:13.5px; outline:none; }
+  input:focus { border-color:var(--accent); }
+  button { background:linear-gradient(120deg,#58b6ff,#7c5bff); color:#fff; border:none; border-radius:10px; padding:9px 14px; font-weight:600; font-size:13px; cursor:pointer; }
+  button.ghost { background:transparent; border:1px solid var(--border); color:var(--text); }
+  button.red { background:rgba(255,90,110,.15); border:1px solid rgba(255,90,110,.4); color:var(--red); }
+  button:disabled { opacity:.4; cursor:default; }
+  .filters { display:flex; gap:10px; flex-wrap:wrap; margin-bottom:16px; align-items:center; }
+  .filters input { flex:1; min-width:140px; }
+  table { width:100%; border-collapse:collapse; font-size:13.5px; }
+  th { text-align:left; color:var(--text2); font-size:11px; text-transform:uppercase; letter-spacing:.6px; padding:8px 10px; border-bottom:1px solid var(--border); }
+  td { padding:10px; border-bottom:1px solid var(--border); vertical-align:middle; }
+  tr:hover td { background:rgba(88,182,255,.04); }
+  .mono { font-family:Consolas,monospace; font-size:12px; color:var(--text2); }
+  .badge { font-size:10.5px; padding:2px 8px; border-radius:20px; background:rgba(124,91,255,.2); color:#b9a5ff; }
+  .badge.user { background:rgba(88,182,255,.15); color:var(--accent); }
+  .acts { display:flex; gap:6px; }
+  .acts button { padding:6px 10px; font-size:12px; }
+  .status { margin-top:14px; font-size:13px; min-height:18px; }
+  .status.err { color:var(--red); }
+  .status.ok { color:#4ade80; }
+  .center { text-align:center; padding:40px 0; }
+  .edit-row input { width:100%; margin-bottom:6px; }
+  .edit-row .acts { margin-top:4px; }
+</style>
+</head>
+<body>
+<div class="card" id="gate">
+  <h1>⚔️ Viking Chat <span>— Админ</span></h1>
+  <div class="sub">Панель управления пользователями</div>
+  <input type="password" id="gatePwd" placeholder="Пароль администратора" style="width:100%;margin-bottom:10px" />
+  <button onclick="login()" style="width:100%">Войти</button>
+  <div class="status err" id="gateErr"></div>
+</div>
+
+<div class="card" id="panel" style="display:none">
+  <h1>⚔️ Viking Chat <span>— Админ</span></h1>
+  <div class="sub">Пользователи в реестре · данные из приватного репозитория</div>
+  <div class="filters">
+    <input id="q" placeholder="Поиск: логин или никнейм" oninput="render()" />
+    <input id="dfrom" type="date" title="Зарегистрирован с" onchange="render()" />
+    <input id="dto" type="date" title="Зарегистрирован по" onchange="render()" />
+    <button class="ghost" onclick="load()">↻ Обновить</button>
+  </div>
+  <table>
+    <thead><tr>
+      <th>Логин</th><th>Никнейм</th><th>Регистрация</th><th>ID</th><th>Тип</th><th>Действия</th>
+    </tr></thead>
+    <tbody id="rows"></tbody>
+  </table>
+  <div class="status" id="status"></div>
+</div>
+
+<script>
+// ====== НАСТРОЙКИ ======
+const ADMIN_PASS = 'viking-admin';          // пароль входа в админку — поменяйте здесь
+const REPO = 'VladislavDelon/Viking-Chat-Closed';
+const _t = ['ghp_OI8t','XzXjesCYJkh0H4M','5QtdyNMqV0R3qnYJH']; // тот же токен, что в приложении
+// ======================
+
+const TOKEN = _t.join('');
+const H = { Authorization: 'Bearer ' + TOKEN, Accept: 'application/vnd.github+json' };
+const url = p => `https://api.github.com/repos/${REPO}/contents/${encodeURIComponent(p)}`;
+let users = [], sha = null, editId = null;
+
+function status(msg, ok) {
+  const el = document.getElementById('status');
+  el.textContent = msg || '';
+  el.className = 'status ' + (ok === true ? 'ok' : ok === false ? 'err' : '');
+}
+function login() {
+  const v = document.getElementById('gatePwd').value;
+  if (v !== ADMIN_PASS) { document.getElementById('gateErr').textContent = 'Неверный пароль'; return; }
+  document.getElementById('gate').style.display = 'none';
+  document.getElementById('panel').style.display = 'block';
+  load();
+}
+document.getElementById('gatePwd').addEventListener('keydown', e => e.key === 'Enter' && login());
+
+async function gh(path, method, body) {
+  const r = await fetch(url(path), { method, headers: H, body: body && JSON.stringify(body) });
+  if (r.status === 404) return null;
+  if (!r.ok) throw new Error('GitHub ' + r.status);
+  return r.json();
+}
+const dec = b64 => decodeURIComponent(escape(atob(b64)));
+const enc = s => btoa(unescape(encodeURIComponent(s)));
+
+async function readUsers() {
+  const j = await gh('users.json', 'GET');
+  if (!j) return [];
+  sha = j.sha;
+  return JSON.parse(dec(j.content.replace(/\n/g, '')));
+}
+async function writeUsers(list) {
+  const j = await gh('users.json', 'PUT', { message: 'admin: users.json', content: enc(JSON.stringify(list)), ...(sha ? { sha } : {}) });
+  sha = j.content.sha;
+}
+
+async function load() {
+  status('Загрузка…');
+  try { users = await readUsers(); render(); status(''); }
+  catch (e) { status('Ошибка: ' + e.message, false); }
+}
+
+function filtered() {
+  const q = document.getElementById('q').value.trim().toLowerCase();
+  const f = document.getElementById('dfrom').value;
+  const t = document.getElementById('dto').value;
+  return users.filter(u => {
+    if (q && !u.login.toLowerCase().includes(q) && !(u.name || '').toLowerCase().includes(q)) return false;
+    const d = new Date(u.createdAt || 0);
+    if (f && d < new Date(f)) return false;
+    if (t && d > new Date(t + 'T23:59:59')) return false;
+    return true;
+  }).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+}
+
+function render() {
+  const tb = document.getElementById('rows');
+  const list = filtered();
+  tb.innerHTML = list.map(u => {
+    if (editId === u.id) return `<tr class="edit-row"><td colspan="6">
+      <input id="e-name" value="${esc(u.name)}" placeholder="Никнейм" />
+      <input id="e-login" value="${esc(u.login)}" placeholder="Логин" />
+      <div class="acts">
+        <button onclick="saveEdit('${u.id}')">Сохранить</button>
+        <button class="ghost" onclick="editId=null;render()">Отмена</button>
+      </div></td></tr>`;
+    return `<tr>
+      <td class="mono">@${esc(u.login)}</td>
+      <td>${esc(u.name)}</td>
+      <td class="mono">${u.createdAt ? new Date(u.createdAt).toLocaleString('ru-RU') : '—'}</td>
+      <td class="mono">${u.id.slice(0, 8)}…</td>
+      <td><span class="badge ${u.bot ? '' : 'user'}">${u.bot ? 'бот' : 'юзер'}</span></td>
+      <td><div class="acts">
+        <button class="ghost" onclick="editId='${u.id}';render()">✏️</button>
+        <button class="ghost" onclick="resetPwd('${u.id}')" title="Сбросить пароль">🔑</button>
+        <button class="red" onclick="del('${u.id}')" title="Удалить">🗑</button>
+      </div></td></tr>`;
+  }).join('');
+  if (!list.length) tb.innerHTML = '<tr><td colspan="6" class="center" style="color:var(--text2)">Никого не найдено</td></tr>';
+}
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+async function saveEdit(id) {
+  const u = users.find(x => x.id === id); if (!u) return;
+  const name = document.getElementById('e-name').value.trim();
+  const login = document.getElementById('e-login').value.trim();
+  if (!/^[a-zA-Z0-9_.-]{3,24}$/.test(login)) { status('Логин: 3–24 символа, латиница', false); return; }
+  if (users.some(x => x.id !== id && x.login.toLowerCase() === login.toLowerCase())) { status('Логин занят', false); return; }
+  status('Сохранение…');
+  try {
+    const oldLogin = u.login;
+    u.name = name || u.name; u.login = login;
+    await writeUsers(users);
+    if (login !== oldLogin) await moveNamespace(oldLogin, login);
+    editId = null; render(); status('Сохранено', true);
+  } catch (e) { status('Ошибка: ' + e.message, false); }
+}
+
+/** переносим файлы u/<old>/… в u/<new>/… при смене логина */
+async function moveNamespace(oldL, newL) {
+  const files = ['chats.json', 'reads.json', 'index.json'];
+  const chats = await gh(`u/${oldL}/chats.json`, 'GET');
+  if (chats) for (const c of JSON.parse(dec(chats.content.replace(/\n/g, '')))) files.push(`m/${c.id}.json`);
+  for (const f of files) {
+    const src = await gh(`u/${oldL}/${f}`, 'GET');
+    if (!src) continue;
+    const dst = await gh(`u/${newL}/${f}`, 'GET');
+    await gh(`u/${newL}/${f}`, 'PUT', { message: `admin: move ${f}`, content: src.content.replace(/\n/g, ''), ...(dst ? { sha: dst.sha } : {}) });
+    await gh(`u/${oldL}/${f}`, 'DELETE', { message: `admin: rm u/${oldL}/${f}`, sha: src.sha });
+  }
+}
+
+async function resetPwd(id) {
+  const u = users.find(x => x.id === id); if (!u) return;
+  const pwd = prompt(`Новый пароль для @${u.login}:`);
+  if (!pwd || pwd.length < 4) return status('Отменено / пароль < 4 символов', false);
+  status('Сброс пароля…');
+  try {
+    const salt = btoa(String.fromCharCode(...crypto.getRandomValues(new Uint8Array(16))));
+    const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(pwd), 'PBKDF2', false, ['deriveBits']);
+    const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', hash: 'SHA-256', salt: Uint8Array.from(atob(salt), c => c.charCodeAt(0)), iterations: 120000 }, key, 256);
+    u.salt = salt; u.passwordHash = btoa(String.fromCharCode(...new Uint8Array(bits)));
+    await writeUsers(users);
+    status(`Пароль @${u.login} сброшен`, true);
+  } catch (e) { status('Ошибка: ' + e.message, false); }
+}
+
+async function del(id) {
+  const u = users.find(x => x.id === id); if (!u) return;
+  if (!confirm(`Удалить @${u.login} и все его данные?`)) return;
+  status('Удаление…');
+  try {
+    users = users.filter(x => x.id !== id);
+    await writeUsers(users);
+    const chats = await gh(`u/${u.login}/chats.json`, 'GET');
+    const files = ['chats.json', 'reads.json', 'index.json'];
+    if (chats) for (const c of JSON.parse(dec(chats.content.replace(/\n/g, '')))) files.push(`m/${c.id}.json`);
+    for (const f of files) {
+      const src = await gh(`u/${u.login}/${f}`, 'GET');
+      if (src) await gh(`u/${u.login}/${f}`, 'DELETE', { message: `admin: rm u/${u.login}/${f}`, sha: src.sha });
+    }
+    render(); status(`@${u.login} удалён`, true);
+  } catch (e) { status('Ошибка: ' + e.message, false); }
+}
+</script>
+</body>
+</html>

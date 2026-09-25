@@ -51,6 +51,7 @@ interface State {
   register: (login: string, name: string, password: string) => Promise<{ ok: boolean; key?: string; error?: string }>
   login: (login: string, password: string) => Promise<string | null>
   submitKey: (key: string) => Promise<boolean>
+  cancelKey: () => void
   logout: () => void
 
   openChat: (chatId: string | null) => void
@@ -356,6 +357,10 @@ export const useStore = create<State>((set, get) => {
       await loadAll()
       localStorage.setItem(LS_SESSION, u.login)
       return true
+    },
+
+    cancelKey() {
+      set({ needKeyFor: null })
     },
 
     logout() {

@@ -18,7 +18,7 @@ import { SeasonalFx } from './SeasonalFx'
 type Mode = 'login' | 'register'
 
 export function AuthScreen() {
-  const { login, register, submitKey, needKeyFor } = useStore()
+  const { login, register, submitKey, cancelKey, needKeyFor } = useStore()
   const [mode, setMode] = useState<Mode>('login')
   const [loginV, setLoginV] = useState('')
   const [name, setName] = useState('')
@@ -88,7 +88,7 @@ export function AuthScreen() {
               <div className="key-banner">
                 <ShieldCheck size={18} />
                 На этом устройстве нет ключа аккаунта <b>@{needKeyFor}</b>. Введите ключ, чтобы
-                расшифровать облачные данные.
+                расшифровать переписку.
               </div>
               <input
                 className="input mono"
@@ -100,6 +100,21 @@ export function AuthScreen() {
               {error && <div className="auth-error">{error}</div>}
               <button className="btn primary" disabled={busy} onClick={doKey}>
                 <KeyRound size={17} /> Расшифровать и войти
+              </button>
+              <button
+                className="btn"
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: 'var(--text2)',
+                  marginTop: 4,
+                }}
+                onClick={() => {
+                  setError(null)
+                  cancelKey()
+                }}
+              >
+                ← Назад ко входу
               </button>
             </motion.div>
           ) : (
