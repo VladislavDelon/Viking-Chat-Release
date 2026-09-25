@@ -101,7 +101,7 @@ export function NewChatModal({ onClose }: { onClose: () => void }) {
           <div className="search-box inset">
             <Search size={15} />
             <input
-              placeholder="Поиск по @логину или имени"
+              placeholder="Поиск по никнейму"
               value={query}
               onChange={e => setQuery(e.target.value)}
             />

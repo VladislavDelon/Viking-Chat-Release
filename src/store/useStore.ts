@@ -60,7 +60,7 @@ interface State {
   togglePin: (chatId: string) => Promise<void>
   deleteChat: (chatId: string) => Promise<void>
   updateProfile: (patch: { name?: string; bio?: string; avatar?: string }) => Promise<void>
-  changeLogin: (newLogin: string) => Promise<string | null>
+  changeLogin: (newLogin: string, password: string) => Promise<string | null>
   changePassword: (current: string, next: string) => Promise<string | null>
   connectSync: (cfg: SyncConfig | null) => Promise<string | null>
   disconnectSync: () => Promise<void>
@@ -415,9 +415,11 @@ export const useStore = create<State>((set, get) => {
       }))
     },
 
-    async changeLogin(newLogin) {
+    async changeLogin(newLogin, password) {
       const { user } = get()
       if (!user) return 'Нет сессии'
+      if ((await hashPassword(password, user.salt)) !== user.passwordHash)
+        return 'Неверный пароль — смена логина требует подтверждения'
       const login = newLogin.trim()
       if (!/^[a-zA-Z0-9_.-]{3,24}$/.test(login))
         return 'Логин: 3–24 символа, латиница, цифры, _ . -'
@@ -439,8 +441,10 @@ export const useStore = create<State>((set, get) => {
     async changePassword(current, next) {
       const { user } = get()
       if (!user) return 'Нет сессии'
-      if ((await hashPassword(current, user.salt)) !== user.passwordHash)
-        return 'Неверный текущий пароль'
+      const key = localStorage.getItem(LS_KEY(user.login))
+      const pwdOk = (await hashPassword(current, user.salt)) === user.passwordHash
+      const keyOk = !!key && normalizeAccountKey(current) === key
+      if (!pwdOk && !keyOk) return 'Введите текущий пароль или ключ аккаунта'
       if (next.length < 4) return 'Новый пароль: минимум 4 символа'
       user.salt = randomSalt()
       user.passwordHash = await hashPassword(next, user.salt)

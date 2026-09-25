@@ -8,16 +8,12 @@ import {
   UserPlus,
   ShieldCheck,
   Download,
-  Cloud,
 } from 'lucide-react'
 import { useStore } from '../store/useStore'
 import { VikingHelm } from './VikingHelm'
 import { PasswordInput } from './PasswordInput'
-import { loadSyncConfig, saveSyncConfig } from '../lib/github'
-import { cloud } from '../lib/cloud'
 import { downloadAccountKey } from '../lib/download'
 import { SeasonalFx } from './SeasonalFx'
-import { getSeason, SEASON_META } from '../lib/season'
 
 type Mode = 'login' | 'register'
 
@@ -32,25 +28,6 @@ export function AuthScreen() {
   const [busy, setBusy] = useState(false)
   const [newKey, setNewKey] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
-  const [syncOpen, setSyncOpen] = useState(false)
-  const [syncRepo, setSyncRepo] = useState(
-    loadSyncConfig()?.repo ?? 'VladislavDelon/Viking-Chat-Closed',
-  )
-  const [syncToken, setSyncToken] = useState(loadSyncConfig()?.token ?? '')
-  const [synced, setSynced] = useState(!!loadSyncConfig())
-  const season = getSeason()
-
-  function saveSync() {
-    if (syncToken.trim() && syncRepo.trim()) {
-      const cfg = { token: syncToken.trim(), repo: syncRepo.trim() }
-      saveSyncConfig(cfg)
-      cloud.configure(cfg, null)
-    } else {
-      saveSyncConfig(null) // revert to the built-in default repo
-      cloud.configure(loadSyncConfig(), null)
-    }
-    setSynced(true)
-  }
 
   async function doLogin() {
     setBusy(true)
@@ -98,10 +75,7 @@ export function AuthScreen() {
           <VikingHelm size={38} />
         </div>
         <h1>Viking Chat</h1>
-        <p className="auth-sub">Защищённый облачный мессенджер</p>
-        <div className="season-chip">
-          {SEASON_META[season].big} {SEASON_META[season].label}
-        </div>
+        <p className="auth-sub">Защищённый мессенджер</p>
 
         <AnimatePresence mode="wait">
           {needKeyFor ? (
@@ -167,7 +141,7 @@ export function AuthScreen() {
               {mode === 'register' && (
                 <input
                   className="input"
-                  placeholder="Имя (как вас видят другие)"
+                  placeholder="Никнейм (как вас видят другие)"
                   value={name}
                   onChange={e => setName(e.target.value)}
                 />
@@ -189,40 +163,9 @@ export function AuthScreen() {
                 {mode === 'login' ? 'Войти' : 'Создать аккаунт'}
               </button>
               <div className="auth-hint">
-                <KeyRound size={13} /> Ключ аккаунта создаётся при регистрации и хранится локально —
+                <KeyRound size={13} /> Ключ аккаунта создаётся при регистрации —
                 он понадобится для входа на новом устройстве.
               </div>
-
-              <button className="auth-sync-toggle" onClick={() => setSyncOpen(v => !v)}>
-                <Cloud size={13} />
-                {synced
-                  ? 'Облако подключено — данные синхронизируются'
-                  : 'Облако отключено — данные только на этом устройстве'}
-                <span className={`sync-dot ${synced ? 'on' : ''}`} />
-              </button>
-              {syncOpen && (
-                <div className="auth-sync">
-                  <input
-                    className="input mono"
-                    placeholder="owner/repo"
-                    value={syncRepo}
-                    onChange={e => setSyncRepo(e.target.value)}
-                  />
-                  <PasswordInput
-                    placeholder="GitHub token (repo)"
-                    value={syncToken}
-                    onChange={setSyncToken}
-                    onEnter={saveSync}
-                  />
-                  <button className="btn primary" onClick={saveSync}>
-                    Сохранить подключение
-                  </button>
-                  <div className="auth-hint">
-                    По умолчанию используется встроенное приватное облако — поля можно не
-                    заполнять. После входа с ключом VKNG-… переписка подтянется автоматически.
-                  </div>
-                </div>
-              )}
             </motion.div>
           )}
         </AnimatePresence>

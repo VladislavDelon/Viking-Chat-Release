@@ -63,7 +63,7 @@ export function ChatWindow() {
           <h2>Viking Chat</h2>
           <p>Выберите чат или создайте новый</p>
           <span className="e2e-note">
-            <Lock size={13} /> Сквозное шифрование · данные хранятся в облаке
+            <Lock size={13} /> Сквозное шифрование · сообщения видите только вы
           </span>
         </motion.div>
       </main>
