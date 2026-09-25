@@ -435,6 +435,7 @@ html[data-season='autumn'] .auth-bg {
 .btn.danger.solid { background: #e5484d; color: #fff; border-color: transparent; }
 .btn.danger.solid:hover { background: #d93d42; }
 .danger-zone { border-color: rgba(255, 90, 110, 0.35); }
+.set-section + .btn.danger { margin-bottom: 18px; }
 .danger-zone .set-title { color: #ff7b8a; }
 .pwd-wrap { position: relative; }
 .pwd-wrap .input { padding-right: 42px; }

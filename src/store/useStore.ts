@@ -124,6 +124,21 @@ export const useStore = create<State>((set, get) => {
       messages: await decryptAll(vault, msgs),
       reads,
     })
+
+    // one-time migration: rewrite the old tech-jargon news post
+    const { chats: cs, messages: mm } = get()
+    const news = cs.find(c => c.kind === 'channel' && c.title === 'Viking News')
+    if (news) {
+      for (const m of mm[news.id] ?? []) {
+        if (m.payload?.t?.includes('AES-256-GCM')) {
+          const t =
+            '⚔️ Viking Chat запущен! Личные чаты, группы и каналы, медиа, поиск, тёмная и светлая темы и сезонные анимации — уже здесь.'
+          m.payload = { t }
+          m.enc = await (await chatVault(news.id)).encryptJson({ t })
+          void cloud.updateMessage(m, news.ownerLogin)
+        }
+      }
+    }
   }
 
   function scheduleRefresh() {
