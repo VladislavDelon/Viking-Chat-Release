@@ -47,6 +47,10 @@ export function isDefaultSync(cfg: SyncConfig | null): boolean {
   return !!cfg && cfg.repo === DEFAULT_SYNC.repo && cfg.token === DEFAULT_SYNC.token
 }
 
+/** 12s timeout — the app must never hang on a dead/blocked API. */
+const fetchGh = (u: string, init?: RequestInit) =>
+  fetch(u, { ...init, signal: AbortSignal.timeout(12_000) })
+
 const b64encode = (s: string) => btoa(unescape(encodeURIComponent(s)))
 const b64decode = (s: string) => decodeURIComponent(escape(atob(s)))
 
@@ -68,7 +72,7 @@ export class GitHubStore {
   /** Read a JSON file. Returns null if it doesn't exist. ETag-cached: 304s are free. */
   async read<T>(path: string): Promise<{ data: T; sha?: string } | null> {
     const cached = this.cache.get(path)
-    const res = await fetch(this.url(path), {
+    const res = await fetchGh(this.url(path), {
       headers: {
         Authorization: `Bearer ${this.cfg.token}`,
         Accept: 'application/vnd.github+json',
@@ -92,7 +96,7 @@ export class GitHubStore {
     let retried = false
     for (;;) {
       const cur = await this.read<T>(path) // ETag-cached; also gives us sha
-      const res = await fetch(this.url(path), {
+      const res = await fetchGh(this.url(path), {
         method: 'PUT',
         headers: {
           Authorization: `Bearer ${this.cfg.token}`,
@@ -125,7 +129,7 @@ export class GitHubStore {
   async delete(path: string): Promise<void> {
     const cur = await this.read<unknown>(path)
     if (!cur?.sha) return
-    const res = await fetch(this.url(path), {
+    const res = await fetchGh(this.url(path), {
       method: 'DELETE',
       headers: {
         Authorization: `Bearer ${this.cfg.token}`,

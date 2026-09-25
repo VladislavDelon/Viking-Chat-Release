@@ -174,13 +174,24 @@ export const useStore = create<State>((set, get) => {
       status,
       payload,
     }
-    await cloud.appendMessage(m, chat.ownerLogin ?? user?.login)
+    // optimistic: show instantly, persist in background
     set(s => ({
       messages: {
         ...s.messages,
         [chat.id]: [...(s.messages[chat.id] ?? []), m],
       },
     }))
+    void cloud.appendMessage(m, chat.ownerLogin ?? user?.login).catch(() => {
+      set(s => ({
+        messages: {
+          ...s.messages,
+          [chat.id]: (s.messages[chat.id] ?? []).map(x =>
+            x.id === m.id ? { ...x, failed: true } : x,
+          ),
+        },
+      }))
+      get().toast('Не отправлено', 'Сообщение не сохранилось — проверьте связь')
+    })
     return m
   }
 
@@ -225,21 +236,41 @@ export const useStore = create<State>((set, get) => {
     authError: null,
 
     async init() {
-      cloud.configure(loadSyncConfig(), null)
-      cloud.onExternalChange(scheduleRefresh)
-      const login = localStorage.getItem(LS_SESSION)
-      const accountKey = login ? localStorage.getItem(LS_KEY(login)) : null
-      if (login && accountKey) {
-        cloud.configure(loadSyncConfig(), login)
-        const u = await cloud.userByLogin(login)
-        if (u) {
-          const vault = await Vault.fromAccountKey(accountKey)
-          set({ user: u, vault, ready: true })
-          await loadAll()
-          return
+      try {
+        cloud.configure(loadSyncConfig(), null)
+        cloud.onExternalChange(scheduleRefresh)
+        const login = localStorage.getItem(LS_SESSION)
+        const accountKey = login ? localStorage.getItem(LS_KEY(login)) : null
+        if (login && accountKey) {
+          cloud.configure(loadSyncConfig(), login)
+          const u = await cloud.userByLogin(login)
+          if (u) {
+            const vault = await Vault.fromAccountKey(accountKey)
+            set({ user: u, vault })
+            await loadAll()
+          }
         }
+      } catch {
+        // backend unreachable (blocked api.github.com etc.) — local mode, no hang
+        try {
+          const login = localStorage.getItem(LS_SESSION)
+          const accountKey = login ? localStorage.getItem(LS_KEY(login)) : null
+          cloud.configure(null, login)
+          if (login && accountKey) {
+            const u = await cloud.userByLogin(login)
+            if (u) {
+              const vault = await Vault.fromAccountKey(accountKey)
+              set({ user: u, vault })
+              await loadAll()
+              get().toast('Нет связи', 'Работаем офлайн — синхронизация возобновится сама')
+            }
+          }
+        } catch {
+          /* fall through to auth screen */
+        }
+      } finally {
+        set({ ready: true })
       }
-      set({ ready: true })
     },
 
     async register(login, name, password) {
@@ -248,7 +279,12 @@ export const useStore = create<State>((set, get) => {
       if (!/^[a-zA-Z0-9_.-]{3,24}$/.test(login))
         return { ok: false, error: 'Логин: 3–24 символа, латиница, цифры, _ . -' }
       if (password.length < 4) return { ok: false, error: 'Пароль: минимум 4 символа' }
-      if (await cloud.userByLogin(login)) return { ok: false, error: 'Такой логин уже занят' }
+      try {
+        if (await cloud.userByLogin(login))
+          return { ok: false, error: 'Такой логин уже занят' }
+      } catch {
+        return { ok: false, error: 'Нет связи с сервером — проверьте интернет и повторите' }
+      }
 
       const accountKey = generateAccountKey()
       const salt = randomSalt()
@@ -276,7 +312,12 @@ export const useStore = create<State>((set, get) => {
     },
 
     async login(login, password) {
-      const u = await cloud.userByLogin(login.trim())
+      let u: User | undefined
+      try {
+        u = await cloud.userByLogin(login.trim())
+      } catch {
+        return 'Нет связи с сервером — проверьте интернет и повторите'
+      }
       if (!u) {
         cloud.configure(loadSyncConfig(), null)
         return 'Пользователь не найден'
@@ -301,7 +342,12 @@ export const useStore = create<State>((set, get) => {
       const normalized = normalizeAccountKey(key)
       if (!/^(VKNG|FRZN)(-[A-Z0-9]{4,6})+$/.test(normalized) && normalized.length < 10)
         return false
-      const u = await cloud.userByLogin(needKeyFor)
+      let u: User | undefined
+      try {
+        u = await cloud.userByLogin(needKeyFor)
+      } catch {
+        return false
+      }
       if (!u) return false
       cloud.configure(loadSyncConfig(), u.login)
       const vault = await Vault.fromAccountKey(normalized)
@@ -379,12 +425,15 @@ export const useStore = create<State>((set, get) => {
       const payload: MessagePayload = { t: text.trim(), a: attachments.length ? attachments : undefined }
       try {
         await pushMessage(chat, user.id, payload)
-      } catch (e) {
-        get().toast('Не отправлено', `Сообщение не сохранилось: ${String(e)}`)
+      } catch {
+        get().toast('Не отправлено', 'Сообщение не сохранилось — проверьте связь')
         return
       }
-      await cloud.markRead(chatId, user.id, Date.now())
-      set({ reads: await cloud.reads() })
+      // fire-and-forget — don't make the UI wait on the API
+      void cloud
+        .markRead(chatId, user.id, Date.now())
+        .then(async () => set({ reads: await cloud.reads() }))
+        .catch(() => {})
       if (chat.kind !== 'channel') scheduleBotReply(chat, user.id, text)
     },
 
