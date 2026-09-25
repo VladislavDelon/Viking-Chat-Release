@@ -1,36 +1,66 @@
 import { cloud } from './cloud'
-import { colorFor, uid, Vault } from './crypto'
+import { uid, Vault } from './crypto'
 import type { Chat, User } from '../types'
 
-export const BOT_REPLIES = [
-  'Принято, воин ⚔️',
-  'Сколь! 🍺',
-  'Интересно! Расскажи подробнее.',
-  'Согласен, отличная идея 🛡',
-  'Ха, классно 😄',
-  'За Одина и Вальгаллу!',
-  'Давай обсудим это у костра?',
-  'Ок, записал на рунном камне.',
-  'Круто! А что дальше?',
-  '👍',
+/** Keyword-matched answers for the "Viking помощь" support chat. */
+const HELP_ANSWERS: [RegExp, string][] = [
+  [
+    /ключ|vkng/i,
+    'Ключ аккаунта VKNG-… создаётся при регистрации и хранится на устройстве. Найти и скачать его можно в Настройках → Безопасность. Без него не расшифровать переписку на новом устройстве!',
+  ],
+  [
+    /синхрон|облак|github|устройств/i,
+    'Синхронизация между устройствами: Настройки → Облачная синхронизация → укажите приватный репозиторий и GitHub token. Данные хранятся там зашифрованными.',
+  ],
+  [/парол/i, 'Сменить пароль: Настройки → Безопасность. Понадобится текущий пароль.'],
+  [
+    /фото|аватар|имя|логин|профил/i,
+    'Имя, фото и логин меняются в Настройках → Профиль. Фото обрежется до квадрата автоматически.',
+  ],
+  [/тема|тёмн|светл|оформлен/i, 'Тема переключается в Настройках → Внешний вид или иконкой в шапке.'],
+  [
+    /канал|групп|чат|написать|найти/i,
+    'Новый чат (кнопка +) → личный, группа или канал. Личный можно найти по @логину пользователя.',
+  ],
+  [
+    /шифр|безопас|защит/i,
+    'Сообщения шифруются AES-256-GCM до записи в облако — на сервере лежит только шифротекст.',
+  ],
+  [/удал|стереть/i, 'Удалить чат — иконка корзины в шапке чата. Сообщение — правый клик → Удалить.'],
 ]
 
-interface BotDef {
-  login: string
-  name: string
-  greet: string
+const HELP_FALLBACK =
+  'Хороший вопрос! � Загляните в Настройки ⚙️ — там профиль, безопасность, облако и тема. Если не нашли ответ — уточните вопрос.'
+
+export function helpReply(text: string): string {
+  for (const [re, answer] of HELP_ANSWERS) if (re.test(text)) return answer
+  return HELP_FALLBACK
 }
 
-const BOTS: BotDef[] = [
-  { login: 'lagertha', name: 'Лагерта', greet: 'Привет, воин! Я Лагерта ⚔️ Добро пожаловать в Viking Chat!' },
-  { login: 'ragnar', name: 'Рагнар', greet: 'Сколь! Здесь вся переписка под шифром и хранится в облаке 🛡' },
-  { login: 'floki', name: 'Флоки', greet: 'Хей! Я построил этот чат из драккаров и шифров 😄 Пиши, если что-то нужно!' },
-]
+const SUPPORT_LOGIN = 'viking.support'
+const SUPPORT_NAME = 'Поддержка Viking'
 
-/** Creates demo contacts, a group and a channel for a freshly registered account. */
+export async function ensureSupportBot(): Promise<User> {
+  const existing = await cloud.userByLogin(SUPPORT_LOGIN)
+  if (existing) return existing
+  const bot: User = {
+    id: uid(),
+    login: SUPPORT_LOGIN,
+    name: SUPPORT_NAME,
+    color: '#5b8cff',
+    passwordHash: '',
+    salt: '',
+    bot: true,
+    createdAt: Date.now(),
+  }
+  await cloud.saveUser(bot)
+  return bot
+}
+
+/** Creates "Избранное", "Viking помощь" and "Viking News" for a new account. */
 export async function seedFor(user: User, vault: Vault): Promise<Chat[]> {
-  const now = Date.now()
-  const chats: Chat[] = []
+  let now = Date.now()
+  const support = await ensureSupportBot()
 
   const saved: Chat = {
     id: uid(),
@@ -42,54 +72,19 @@ export async function seedFor(user: User, vault: Vault): Promise<Chat[]> {
     pinned: true,
     createdAt: now,
   }
-  chats.push(saved)
 
-  for (const [i, b] of BOTS.entries()) {
-    const bot: User = {
-      id: uid(),
-      login: `${b.login}.${user.login}`,
-      name: b.name,
-      color: colorFor(b.login),
-      passwordHash: '',
-      salt: '',
-      bot: true,
-      createdAt: now,
-    }
-    await cloud.saveUser(bot)
-    const chat: Chat = {
-      id: uid(),
-      kind: 'direct',
-      title: b.name,
-      memberIds: [user.id, bot.id],
-      ownerId: user.id,
-      color: bot.color,
-      createdAt: now + i,
-    }
-    await cloud.saveChat(chat)
-    const payload = { t: b.greet }
-    await cloud.appendMessage({
-      id: uid(),
-      chatId: chat.id,
-      senderId: bot.id,
-      createdAt: now - (BOTS.length - i) * 60_000,
-      enc: await vault.encryptJson(payload),
-      status: 'delivered',
-      payload,
-    })
-    chats.push(chat)
-  }
-
-  const group: Chat = {
+  const help: Chat = {
     id: uid(),
     kind: 'group',
-    title: 'Команда Viking',
-    memberIds: [user.id],
-    ownerId: user.id,
+    title: 'Viking помощь',
+    memberIds: [user.id, support.id],
+    ownerId: support.id,
     color: '#7c5bff',
-    description: 'Общий чат команды',
+    description: 'Вопросы о программе — отвечаем и помогаем',
     createdAt: now,
   }
-  const channel: Chat = {
+
+  const news: Chat = {
     id: uid(),
     kind: 'channel',
     title: 'Viking News',
@@ -99,33 +94,34 @@ export async function seedFor(user: User, vault: Vault): Promise<Chat[]> {
     description: 'Новости и обновления Viking Chat',
     createdAt: now,
   }
-  await cloud.saveChat(group)
-  await cloud.saveChat(channel)
 
-  const gPayload = { t: `Добро пожаловать в команду, ${user.name}! ❄️` }
-  await cloud.appendMessage({
-    id: uid(),
-    chatId: group.id,
-    senderId: user.id,
-    createdAt: now - 30_000,
-    enc: await vault.encryptJson(gPayload),
-    status: 'read',
-    payload: gPayload,
-  })
-  const cPayload = {
-    t: 'Viking Chat запущен! ⚔️ Сквозное шифрование, облачная синхронизация и северный дизайн — уже здесь.',
+  for (const c of [saved, help, news]) await cloud.saveChat(c)
+
+  const posts: [Chat, string, string][] = [
+    [
+      help,
+      support.id,
+      'Привет! 👋 Это чат поддержки Viking Chat. Задавайте любые вопросы о программе — про ключ, синхронизацию, настройки — я постараюсь помочь.',
+    ],
+    [
+      news,
+      user.id,
+      '⚔️ Viking Chat запущен! Сквозное шифрование AES-256-GCM, облачная синхронизация, сезонные анимации и северный дизайн — уже здесь.',
+    ],
+    [news, user.id, '📱 Скачать Android-версию можно из раздела Releases репозитория Viking-Chat-Release.'],
+  ]
+  for (const [chat, sender, text] of posts) {
+    const payload = { t: text }
+    await cloud.appendMessage({
+      id: uid(),
+      chatId: chat.id,
+      senderId: sender,
+      createdAt: (now -= 60_000),
+      enc: await vault.encryptJson(payload),
+      status: 'delivered',
+      payload,
+    })
   }
-  await cloud.appendMessage({
-    id: uid(),
-    chatId: channel.id,
-    senderId: user.id,
-    createdAt: now - 15_000,
-    enc: await vault.encryptJson(cPayload),
-    status: 'read',
-    payload: cPayload,
-  })
 
-  await cloud.saveChat(saved)
-  chats.push(group, channel)
-  return chats
+  return [saved, help, news]
 }

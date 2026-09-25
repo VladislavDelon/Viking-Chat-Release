@@ -1,6 +1,7 @@
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, Ship } from 'lucide-react'
+import { X } from 'lucide-react'
 import { useStore } from '../store/useStore'
+import { VikingHelm } from './VikingHelm'
 
 export function Toasts() {
   const { toasts, dismissToast } = useStore()
@@ -15,7 +16,7 @@ export function Toasts() {
             animate={{ opacity: 1, x: 0, scale: 1 }}
             exit={{ opacity: 0, x: 60, scale: 0.95 }}
           >
-            <Ship size={17} className="toast-icon" />
+            <VikingHelm size={17} className="toast-icon" />
             <div className="toast-body">
               <b>{t.title}</b>
               <span>{t.body}</span>

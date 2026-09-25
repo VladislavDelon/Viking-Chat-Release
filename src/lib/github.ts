@@ -95,4 +95,19 @@ export class GitHubStore {
       return
     }
   }
+
+  async delete(path: string): Promise<void> {
+    const cur = await this.read<unknown>(path)
+    if (!cur?.sha) return
+    const res = await fetch(this.url(path), {
+      method: 'DELETE',
+      headers: {
+        Authorization: `Bearer ${this.cfg.token}`,
+        Accept: 'application/vnd.github+json',
+      },
+      body: JSON.stringify({ message: `remove ${path}`, sha: cur.sha }),
+    })
+    if (!res.ok) throw new Error(`GitHub DELETE ${res.status}`)
+    this.cache.delete(path)
+  }
 }

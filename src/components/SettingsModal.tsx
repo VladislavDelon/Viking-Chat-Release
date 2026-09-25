@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { motion } from 'framer-motion'
 import {
   X,
@@ -15,10 +16,14 @@ import {
   ShieldCheck,
   Palette,
   Cloud,
+  Download,
+  Trash2,
 } from 'lucide-react'
 import { accountKeyFor, useStore } from '../store/useStore'
 import { loadSyncConfig } from '../lib/github'
+import { downloadAccountKey } from '../lib/download'
 import { Avatar } from './Avatar'
+import { PasswordInput } from './PasswordInput'
 import { fileToAvatar } from '../lib/image'
 
 export function SettingsModal({ onClose }: { onClose: () => void }) {
@@ -32,6 +37,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
     logout,
     toast,
     connectSync,
+    deleteAccount,
   } = useStore()
   const syncCfg = loadSyncConfig()
   const [name, setName] = useState(user?.name ?? '')
@@ -48,6 +54,9 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
   const [syncToken, setSyncToken] = useState(syncCfg?.token ?? '')
   const [syncErr, setSyncErr] = useState<string | null>(null)
   const [synced, setSynced] = useState(!!syncCfg)
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const [delPwd, setDelPwd] = useState('')
+  const [delErr, setDelErr] = useState<string | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
 
   if (!user) return null
@@ -93,6 +102,17 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
     }
   }
 
+  async function doDelete() {
+    setBusy(true)
+    setDelErr(null)
+    const err = await deleteAccount(delPwd)
+    if (err) {
+      setDelErr(err)
+      setBusy(false)
+    }
+    // on success the store resets → modal unmounts with the app shell
+  }
+
   const copyKey = () => {
     void navigator.clipboard?.writeText(accountKey)
     setCopied(true)
@@ -118,7 +138,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
     }
   }
 
-  return (
+  return createPortal(
     <motion.div
       className="modal-overlay"
       initial={{ opacity: 0 }}
@@ -189,19 +209,12 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
           <div className="set-title">
             <ShieldCheck size={15} /> Безопасность
           </div>
-          <input
-            className="input"
-            type="password"
-            placeholder="Текущий пароль"
-            value={curPwd}
-            onChange={e => setCurPwd(e.target.value)}
-          />
-          <input
-            className="input"
-            type="password"
+          <PasswordInput placeholder="Текущий пароль" value={curPwd} onChange={setCurPwd} />
+          <PasswordInput
             placeholder="Новый пароль"
             value={newPwd}
-            onChange={e => setNewPwd(e.target.value)}
+            onChange={setNewPwd}
+            onEnter={savePassword}
           />
           {pwdErr && <div className="auth-error">{pwdErr}</div>}
           <button
@@ -221,9 +234,17 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
             <button className="icon-btn" onClick={copyKey} title="Скопировать">
               {copied ? <Check size={15} /> : <Copy size={15} />}
             </button>
+            <button
+              className="icon-btn"
+              onClick={() => downloadAccountKey(accountKey, user.login)}
+              title="Скачать ключ файлом"
+            >
+              <Download size={15} />
+            </button>
           </div>
           <p className="modal-hint">
             Ключ аккаунта нужен для входа на новом устройстве — он расшифровывает облачные данные.
+            Автоматически не скачивается: хранится локально, скачать файлом можно кнопкой выше.
           </p>
         </div>
 
@@ -278,7 +299,53 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
         <button className="btn danger" onClick={logout}>
           <LogOut size={16} /> Выйти из аккаунта
         </button>
+
+        <div className="set-section danger-zone">
+          <div className="set-title">
+            <Trash2 size={15} /> Опасная зона
+          </div>
+          {!confirmDelete ? (
+            <button className="btn danger" onClick={() => setConfirmDelete(true)}>
+              <Trash2 size={16} /> Удалить аккаунт
+            </button>
+          ) : (
+            <>
+              <p className="modal-hint">
+                Аккаунт, все чаты и сообщения будут удалены из облака безвозвратно. Введите пароль
+                для подтверждения.
+              </p>
+              <PasswordInput
+                placeholder="Пароль"
+                value={delPwd}
+                onChange={setDelPwd}
+                onEnter={doDelete}
+              />
+              {delErr && <div className="auth-error">{delErr}</div>}
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button
+                  className="btn"
+                  style={{ background: 'var(--input)', border: '1px solid var(--border)' }}
+                  onClick={() => {
+                    setConfirmDelete(false)
+                    setDelPwd('')
+                    setDelErr(null)
+                  }}
+                >
+                  Отмена
+                </button>
+                <button
+                  className="btn danger solid"
+                  disabled={busy || !delPwd}
+                  onClick={doDelete}
+                >
+                  Удалить навсегда
+                </button>
+              </div>
+            </>
+          )}
+        </div>
       </motion.div>
-    </motion.div>
+    </motion.div>,
+    document.body,
   )
 }

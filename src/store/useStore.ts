@@ -10,7 +10,7 @@ import {
   uid,
   colorFor,
 } from '../lib/crypto'
-import { BOT_REPLIES, seedFor } from '../lib/seed'
+import { helpReply, seedFor } from '../lib/seed'
 import type {
   Attachment,
   Chat,
@@ -53,10 +53,12 @@ interface State {
   removeMessage: (id: string) => Promise<void>
   createChat: (kind: ChatKind, title: string, memberIds: string[]) => Promise<Chat>
   togglePin: (chatId: string) => Promise<void>
+  deleteChat: (chatId: string) => Promise<void>
   updateProfile: (patch: { name?: string; bio?: string; avatar?: string }) => Promise<void>
   changeLogin: (newLogin: string) => Promise<string | null>
   changePassword: (current: string, next: string) => Promise<string | null>
   connectSync: (cfg: SyncConfig | null) => Promise<string | null>
+  deleteAccount: (password: string) => Promise<string | null>
   setTheme: (t: Theme) => void
   toast: (title: string, body: string) => void
   dismissToast: (id: string) => void
@@ -140,10 +142,9 @@ export const useStore = create<State>((set, get) => {
     return m
   }
 
-  function scheduleBotReply(chat: Chat, myId: string) {
-    const botId = chat.memberIds.find(id => id !== myId)
-    const bot = get().users.find(u => u.id === botId)
-    if (!bot?.bot) return
+  function scheduleBotReply(chat: Chat, myId: string, userText: string) {
+    const bot = get().users.find(u => u.bot && chat.memberIds.includes(u.id) && u.id !== myId)
+    if (!bot) return
     set(s => ({ typing: { ...s.typing, [chat.id]: bot.name } }))
     setTimeout(
       async () => {
@@ -152,7 +153,7 @@ export const useStore = create<State>((set, get) => {
           delete t[chat.id]
           return { typing: t }
         })
-        const text = BOT_REPLIES[Math.floor(Math.random() * BOT_REPLIES.length)]
+        const text = helpReply(userText)
         await pushMessage(chat.id, bot.id, { t: text }, 'delivered')
         const st = get()
         if (st.activeChatId !== chat.id) {
@@ -294,6 +295,24 @@ export const useStore = create<State>((set, get) => {
       return null
     },
 
+    async deleteAccount(password) {
+      const { user } = get()
+      if (!user) return 'Нет сессии'
+      if ((await hashPassword(password, user.salt)) !== user.passwordHash)
+        return 'Неверный пароль'
+      try {
+        await cloud.deleteAccount(user.id)
+      } catch {
+        /* remote cleanup best-effort */
+      }
+      localStorage.removeItem(LS_KEY(user.login))
+      localStorage.removeItem(LS_SESSION)
+      for (const k of Object.keys(localStorage))
+        if (k.startsWith('vikingcloud.')) localStorage.removeItem(k)
+      set({ user: null, vault: null, activeChatId: null, chats: [], messages: {}, reads: [] })
+      return null
+    },
+
     openChat(chatId) {
       set({ activeChatId: chatId })
       const { user } = get()
@@ -312,7 +331,7 @@ export const useStore = create<State>((set, get) => {
       await pushMessage(chatId, user.id, payload)
       await cloud.markRead(chatId, user.id, Date.now())
       set({ reads: await cloud.reads() })
-      if (chat.kind === 'direct') scheduleBotReply(chat, user.id)
+      if (chat.kind !== 'channel') scheduleBotReply(chat, user.id, text)
     },
 
     async removeMessage(id) {
@@ -345,6 +364,19 @@ export const useStore = create<State>((set, get) => {
       await loadAll()
       set({ activeChatId: chat.id })
       return chat
+    },
+
+    async deleteChat(chatId) {
+      await cloud.deleteChat(chatId)
+      set(s => {
+        const messages = { ...s.messages }
+        delete messages[chatId]
+        return {
+          chats: s.chats.filter(c => c.id !== chatId),
+          messages,
+          activeChatId: s.activeChatId === chatId ? null : s.activeChatId,
+        }
+      })
     },
 
     async togglePin(chatId) {

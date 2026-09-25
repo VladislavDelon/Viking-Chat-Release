@@ -1,7 +1,21 @@
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Ship, Copy, Check, KeyRound, LogIn, UserPlus, ShieldCheck } from 'lucide-react'
+import {
+  Copy,
+  Check,
+  KeyRound,
+  LogIn,
+  UserPlus,
+  ShieldCheck,
+  Download,
+  Cloud,
+} from 'lucide-react'
 import { useStore } from '../store/useStore'
+import { VikingHelm } from './VikingHelm'
+import { PasswordInput } from './PasswordInput'
+import { loadSyncConfig, saveSyncConfig } from '../lib/github'
+import { cloud } from '../lib/cloud'
+import { downloadAccountKey } from '../lib/download'
 import { SeasonalFx } from './SeasonalFx'
 import { getSeason, SEASON_META } from '../lib/season'
 
@@ -18,7 +32,26 @@ export function AuthScreen() {
   const [busy, setBusy] = useState(false)
   const [newKey, setNewKey] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
+  const [syncOpen, setSyncOpen] = useState(false)
+  const [syncRepo, setSyncRepo] = useState(
+    loadSyncConfig()?.repo ?? 'VladislavDelon/Viking-Chat-Closed',
+  )
+  const [syncToken, setSyncToken] = useState(loadSyncConfig()?.token ?? '')
+  const [synced, setSynced] = useState(!!loadSyncConfig())
   const season = getSeason()
+
+  function saveSync() {
+    if (syncToken.trim() && syncRepo.trim()) {
+      const cfg = { token: syncToken.trim(), repo: syncRepo.trim() }
+      saveSyncConfig(cfg)
+      cloud.configure(cfg, null)
+      setSynced(true)
+    } else {
+      saveSyncConfig(null)
+      cloud.configure(null, null)
+      setSynced(false)
+    }
+  }
 
   async function doLogin() {
     setBusy(true)
@@ -63,7 +96,7 @@ export function AuthScreen() {
         transition={{ duration: 0.45, ease: 'easeOut' }}
       >
         <div className="auth-logo">
-          <Ship size={34} />
+          <VikingHelm size={38} />
         </div>
         <h1>Viking Chat</h1>
         <p className="auth-sub">Защищённый облачный мессенджер</p>
@@ -140,13 +173,11 @@ export function AuthScreen() {
                   onChange={e => setName(e.target.value)}
                 />
               )}
-              <input
-                className="input"
-                type="password"
+              <PasswordInput
                 placeholder="Пароль"
                 value={password}
-                onChange={e => setPassword(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && (mode === 'login' ? doLogin() : doRegister())}
+                onChange={setPassword}
+                onEnter={mode === 'login' ? doLogin : doRegister}
               />
               {error && <div className="auth-error">{error}</div>}
 
@@ -162,6 +193,35 @@ export function AuthScreen() {
                 <KeyRound size={13} /> Ключ аккаунта создаётся при регистрации и хранится локально —
                 он понадобится для входа на новом устройстве.
               </div>
+
+              <button className="auth-sync-toggle" onClick={() => setSyncOpen(v => !v)}>
+                <Cloud size={13} />
+                {synced ? 'Облако подключено' : 'Подключить облако для входа с нового устройства'}
+                <span className={`sync-dot ${synced ? 'on' : ''}`} />
+              </button>
+              {syncOpen && (
+                <div className="auth-sync">
+                  <input
+                    className="input mono"
+                    placeholder="owner/repo"
+                    value={syncRepo}
+                    onChange={e => setSyncRepo(e.target.value)}
+                  />
+                  <PasswordInput
+                    placeholder="GitHub token (repo)"
+                    value={syncToken}
+                    onChange={setSyncToken}
+                    onEnter={saveSync}
+                  />
+                  <button className="btn primary" onClick={saveSync} disabled={!syncToken.trim()}>
+                    Сохранить подключение
+                  </button>
+                  <div className="auth-hint">
+                    На новом устройстве введите тот же токен и репозиторий — переписка подтянется из
+                    облака после входа.
+                  </div>
+                </div>
+              )}
             </motion.div>
           )}
         </AnimatePresence>
@@ -193,9 +253,18 @@ export function AuthScreen() {
                   {copied ? <Check size={16} /> : <Copy size={16} />}
                 </button>
               </div>
-              <button className="btn primary" onClick={() => setNewKey(null)}>
-                Я сохранил ключ
-              </button>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button
+                  className="btn"
+                  style={{ background: 'var(--input)', border: '1px solid var(--border)' }}
+                  onClick={() => downloadAccountKey(newKey, loginV)}
+                >
+                  <Download size={16} /> Скачать файлом
+                </button>
+                <button className="btn primary" onClick={() => setNewKey(null)}>
+                  Я сохранил ключ
+                </button>
+              </div>
             </motion.div>
           </motion.div>
         )}

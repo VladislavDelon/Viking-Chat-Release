@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { ArrowLeft, Pin, PinOff, Search, Ship, Users, X, Lock } from 'lucide-react'
+import { ArrowLeft, Pin, PinOff, Search, Trash2, Users, X, Lock } from 'lucide-react'
+import { VikingHelm } from './VikingHelm'
 import { useStore } from '../store/useStore'
 import { Avatar } from './Avatar'
 import { Composer } from './Composer'
@@ -19,6 +20,7 @@ export function ChatWindow() {
     openChat,
     send,
     togglePin,
+    deleteChat,
     toast,
   } = useStore()
   const [searchOpen, setSearchOpen] = useState(false)
@@ -57,7 +59,7 @@ export function ChatWindow() {
           transition={{ duration: 0.5 }}
           className="empty-hero"
         >
-          <Ship size={64} />
+          <VikingHelm size={72} />
           <h2>Viking Chat</h2>
           <p>Выберите чат или создайте новый</p>
           <span className="e2e-note">
@@ -111,6 +113,15 @@ export function ChatWindow() {
           </button>
           <button className="icon-btn" title="Закрепить" onClick={() => togglePin(chat.id)}>
             {chat.pinned ? <PinOff size={18} /> : <Pin size={18} />}
+          </button>
+          <button
+            className="icon-btn danger"
+            title="Удалить чат"
+            onClick={() => {
+              if (confirm(`Удалить чат «${disp.title}»?`)) void deleteChat(chat.id)
+            }}
+          >
+            <Trash2 size={18} />
           </button>
         </div>
       </div>

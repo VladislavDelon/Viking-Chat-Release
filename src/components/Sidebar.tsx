@@ -1,7 +1,6 @@
 import { useMemo, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
-  Ship,
   Search,
   Plus,
   Sun,
@@ -18,6 +17,7 @@ import { chatDisplay, listTime } from '../lib/format'
 import type { Chat, ChatKind } from '../types'
 import { NewChatModal } from './NewChatModal'
 import { SettingsModal } from './SettingsModal'
+import { VikingHelm } from './VikingHelm'
 
 const FILTERS: { id: ChatKind | 'all'; label: string }[] = [
   { id: 'all', label: 'Все' },
@@ -109,7 +109,7 @@ export function Sidebar() {
     <aside className="sidebar">
       <div className="sidebar-head">
         <div className="brand">
-          <Ship size={22} className="brand-icon" />
+          <VikingHelm size={24} className="brand-icon" />
           <span>Viking Chat</span>
         </div>
         <div className="head-actions">

@@ -168,6 +168,30 @@ export const cloud = {
     else chats.push(c)
     writeLocal('chats', chats)
   },
+  async deleteChat(chatId: string) {
+    if (gh && meLogin) {
+      const list = ((await gh.read<Chat[]>(up('chats.json')))?.data ?? []).filter(
+        c => c.id !== chatId,
+      )
+      // local-wins merge: a union merge would resurrect the deleted chat on conflict
+      await gh.write(up('chats.json'), list, (_r, l) => l)
+      try {
+        await gh.delete(up(`m/${chatId}.json`))
+      } catch {
+        /* file may not exist */
+      }
+      await bumpIndex('chats.json')
+      return
+    }
+    writeLocal(
+      'chats',
+      readLocal<Chat[]>('chats', []).filter(c => c.id !== chatId),
+    )
+    writeLocal(
+      'messages',
+      readLocal<Message[]>('messages', []).filter(m => m.chatId !== chatId),
+    )
+  },
 
   async messages(chatId?: string): Promise<Message[]> {
     if (gh && meLogin) {
@@ -205,7 +229,7 @@ export const cloud = {
         const list = (await gh.read<Message[]>(path))?.data ?? []
         const next = list.filter(m => m.id !== id)
         if (next.length !== list.length) {
-          await gh.write(path, next, mergeById<Message>(byTime))
+          await gh.write(path, next, (_r, l) => l)
           await bumpIndex(`m/${c.id}.json`)
           break
         }
@@ -267,6 +291,39 @@ export const cloud = {
     if (i >= 0) reads[i].lastReadAt = at
     else reads.push({ chatId, userId, lastReadAt: at })
     writeLocal('reads', reads)
+  },
+
+  /** Remove account + all its data from the backend. */
+  async deleteAccount(userId: string) {
+    if (gh && meLogin) {
+      const users = ((await gh.read<User[]>('users.json'))?.data ?? []).filter(
+        u => u.id !== userId,
+      )
+      await gh.write('users.json', users, (_r, l) => l)
+      const chats = (await gh.read<Chat[]>(up('chats.json')))?.data ?? []
+      for (const c of chats) {
+        try {
+          await gh.delete(up(`m/${c.id}.json`))
+        } catch {
+          /* may not exist */
+        }
+      }
+      for (const f of ['chats.json', 'reads.json', 'index.json']) {
+        try {
+          await gh.delete(up(f))
+        } catch {
+          /* may not exist */
+        }
+      }
+      return
+    }
+    writeLocal(
+      'users',
+      readLocal<User[]>('users', []).filter(u => u.id !== userId),
+    )
+    writeLocal('chats', [])
+    writeLocal('messages', [])
+    writeLocal('reads', [])
   },
 
   /** One-time upload of everything we have locally (first sync of this account). */
